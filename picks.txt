@@ -1,0 +1,7 @@
+# code = my own short name
+
+AP001 = Nasi putih
+KR012 = Minyak goreng
+HR002 = Telur ayam
+CP062 = Tahu goreng
+DR100 = Kangkung
