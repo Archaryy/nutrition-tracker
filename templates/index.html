@@ -1,14 +1,6 @@
 <!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Food Tracker</title>
-    <link rel="stylesheet" href="styles.css">
-</head>
-<body>
-<main>
-    <h1>Food Tracker</h1>
+{% extends "base.html" %}
+{% block content %}
     <div class="daynav">
         <a href="/?day={{prev_day.isoformat()}}">&larr; {{ prev_day.strftime("%d %b")}}</a>
         <strong>
@@ -18,12 +10,27 @@
     </div>
 
     <section class="card">
-        <div class="kcal">{{ "%.0f"|format(totals.kcal) }} <small>kcal</small></div>
-        <div class="macros">
+      <div class="kcal">{{ "%.0f"|format(totals.kcal) }} <small>kcal{% if targets %} / {{ "%.0f"|format(targets.kcal) }}{% endif %}</small></div>
+      {% if targets %}
+      <div class="bar {% if totals.kcal > targets.kcal %}over{% endif %}"><span style="width:{{ [100, 100 * totals.kcal / targets.kcal]|min|round(0) }}%"></span></div>
+      <div class="sub">
+        {% if totals.kcal > targets.kcal %}Lebih {{ "%.0f"|format(totals.kcal - targets.kcal) }} kcal dari target
+        {% else %}Sisa {{ "%.0f"|format(targets.kcal - totals.kcal) }} kcal{% endif %}
+      </div>
+      {% for label, key in [("Protein","protein"),("Karbo","carbs"),("Lemak","fat")] %}
+      <div class="goal">
+        <div class="top"><span>{{ label }}</span><span><b>{{ "%.0f"|format(totals[key]) }}</b> / {{ "%.0f"|format(targets[key]) }} g</span></div>
+        <div class="bar {% if totals[key] > targets[key] * 1.1 %}over{% endif %}"><span style="width:{{ [100, 100 * totals[key] / targets[key]]|min|round(0) }}%"></span></div>
+      </div>
+      {% endfor %}
+      {% else %}
+      <div class="macros">
         <span>Protein <b>{{ "%.0f"|format(totals.protein) }} g</b></span>
         <span>Karbo <b>{{ "%.0f"|format(totals.carbs) }} g</b></span>
         <span>Lemak <b>{{ "%.0f"|format(totals.fat) }} g</b></span>
-        </div>
+      </div>
+      <p class="sub">Belum ada target. <a class="btn" href="/settings">Atur target harian</a></p>
+      {% endif %}
     </section>
 
     <section class="card">
@@ -87,6 +94,5 @@
     <p class="empty">Belum ada makanan di database. Jalankan <code>python import_data.py</code> dulu (Step 3).</p>
     {% endif %}
   </section>
-</main>
-</body>
-</html>
+
+{% endblock %}

@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block content %}
+  <div class="daynav">
+    <a href="/week?end={{ prev_end.isoformat() }}">&larr; Sebelumnya</a>
+    <strong>{{ days[0].date.strftime("%d %b") }} &ndash; {{ days[-1].date.strftime("%d %b") }}</strong>
+    <a href="/week?end={{ next_end.isoformat() }}">Berikutnya &rarr;</a>
+  </div>
+
+  <section class="card">
+    <div class="sub">Kalori per hari{% if targets %} (garis putus-putus = target {{ "%.0f"|format(targets.kcal) }}){% endif %}</div>
+    <div class="chart">
+      {% if targets %}<div class="line" style="bottom:{{ 100 * targets.kcal / scale }}%"></div>{% endif %}
+      {% for d in days %}
+      <div class="col {% if targets and d.kcal > targets.kcal %}over{% endif %}">
+        <span style="height:{{ 100 * d.kcal / scale }}%" title="{{ '%.0f'|format(d.kcal) }} kcal"></span>
+      </div>
+      {% endfor %}
+    </div>
+    <div class="vals">{% for d in days %}<div>{{ "%.0f"|format(d.kcal) if d.logged else "–" }}</div>{% endfor %}</div>
+    <div class="labels">{% for d in days %}<div><a href="/?day={{ d.date.isoformat() }}" style="color:inherit">{{ d.date.strftime("%a")[:3] }}<br>{{ d.date.day }}</a></div>{% endfor %}</div>
+  </section>
+
+  <section class="card">
+    {% if logged_days %}
+    <table>
+      <thead><tr><th>Rata-rata ({{ logged_days }} hari tercatat)</th><th class="num"></th></tr></thead>
+      <tbody>
+        <tr><td>Kalori</td><td class="num">{{ "%.0f"|format(avg.kcal) }} kcal</td></tr>
+        <tr><td>Protein</td><td class="num">{{ "%.0f"|format(avg.protein) }} g</td></tr>
+        <tr><td>Karbo</td><td class="num">{{ "%.0f"|format(avg.carbs) }} g</td></tr>
+        <tr><td>Lemak</td><td class="num">{{ "%.0f"|format(avg.fat) }} g</td></tr>
+      </tbody>
+    </table>
+    <p class="sub">Hari tanpa catatan tidak dihitung, supaya rata-rata tidak turun palsu.</p>
+    {% else %}
+    <p class="empty">Belum ada catatan di minggu ini.</p>
+    {% endif %}
+  </section>
+{% endblock %}
