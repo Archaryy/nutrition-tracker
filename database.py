@@ -23,6 +23,14 @@ def init_db():
             source TEXT
         );
 
+        CREATE TABLE IF NOT EXISTS ingredient_micros (
+            ingredient_id INTEGER NOT NULL REFERENCES ingredients(id) ON DELETE CASCADE,
+            nutrient TEXT NOT NULL,
+            per_100g REAL NOT NULL,
+            imputed INTEGER NOT NULL DEFAULT 0,
+            PRIMARY KEY (ingredient_id, nutrient)
+        );
+
         CREATE TABLE IF NOT EXISTS dishes (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT NOT NULL UNIQUE,

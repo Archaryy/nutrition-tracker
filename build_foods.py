@@ -47,16 +47,18 @@ def main():
             observed[r["food_id"]] = r
 
     columns = (["food_id", "name", "source", "category", "kcal", "protein_g", "carbs_g",
-                "fat_g", "macros_imputed", "imputed_micros"] + MICROS)
+                "fat_g", "macros_imputed", "imputed_micros", "imputed_fields"] + MICROS)
     rows = []
     for r in final:
         obs = observed.get(r["food_id"], {})
         imputed_macro = any(blank(obs.get(k)) for k in MACROS)
-        imputed_micro = sum(1 for k in MICROS if blank(obs.get(k)))
+        imputed_keys = [k for k in MICROS if blank(obs.get(k))]
+        imputed_micro = len(imputed_keys)
         row = {"food_id": r["food_id"], "name": tidy(r["food_name_original"], r["source"]),
                "source": r["source"], "category": r["category_normalized"],
                "macros_imputed": "yes" if imputed_macro else "no",
-               "imputed_micros": imputed_micro}
+               "imputed_micros": imputed_micro,
+               "imputed_fields": ";".join(imputed_keys)}
         for src, dst in MACROS.items():
             row[dst] = round(float(r[src]), 1) if not blank(r[src]) else ""
         for k in MICROS:

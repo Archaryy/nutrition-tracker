@@ -83,6 +83,43 @@ GROUP BY m.id
 ORDER BY m.eaten_at, m.id
 """
 
+# nutrient key -> (label, unit, rough adult daily reference). The reference is only a
+# general yardstick, not personal advice: needs differ by age, sex and condition.
+MICROS = {
+    "fiber_g": ("Serat", "g", 25),
+    "calcium_mg": ("Kalsium", "mg", 1000),
+    "iron_mg": ("Zat besi", "mg", 15),
+    "zinc_mg": ("Seng", "mg", 10),
+    "magnesium_mg": ("Magnesium", "mg", 350),
+    "vitamin_c_mg": ("Vitamin C", "mg", 75),
+    "sodium_mg": ("Natrium", "mg", 2000),
+}
+
+MICRO_SQL = """
+SELECT im.nutrient,
+       SUM(m.servings * im.per_100g * di.grams / 100.0) AS total,
+       SUM(CASE WHEN im.imputed = 1 THEN m.servings * im.per_100g * di.grams / 100.0
+                ELSE 0 END) AS imputed_total
+FROM meal_log m
+JOIN dish_ingredients di ON di.dish_id = m.dish_id
+JOIN ingredient_micros im ON im.ingredient_id = di.ingredient_id
+WHERE date(m.eaten_at) = ?
+GROUP BY im.nutrient
+"""
+
+
+def day_micros(conn, day):
+    found = {r["nutrient"]: r for r in conn.execute(MICRO_SQL, (day.isoformat(),))}
+    out = []
+    for key, (label, unit, ref) in MICROS.items():
+        r = found.get(key)
+        total = r["total"] if r else 0.0
+        out.append({"label": label, "unit": unit, "ref": ref, "total": total,
+                    "imputed_pct": (100 * r["imputed_total"] / total) if r and total else 0,
+                    "limit": key == "sodium_mg"})
+    return out
+
+
 @app.get("/")
 def home(request: Request, day: str =""):
     shown = parse_day(day)
@@ -93,6 +130,7 @@ def home(request: Request, day: str =""):
             "SELECT id, name, serving_label FROM dishes ORDER BY name"
         ).fetchall()
         targets = get_targets(conn)
+        micros = day_micros(conn, shown) if entries else []
         totals = {
             key: sum(e[key] for e in entries) for key in ("kcal", "protein", "carbs", "fat")
         }
@@ -106,6 +144,7 @@ def home(request: Request, day: str =""):
         "entries": entries,
         "dishes": dishes,
         "totals": totals,
+        "micros": micros,
         "meal_types": MEAL_TYPES,
         "default_meal": default_meal_type(now),
         "now_time": now.strftime("%H:%M"),
