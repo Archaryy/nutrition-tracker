@@ -1,12 +1,18 @@
 from datetime import date, datetime, timedelta
 from fastapi import FastAPI, Form, HTTPException, Request
-from fastapi.responses import RedirectResponse
+from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from database import get_connection, init_db
 import csv
 
 app = FastAPI()
 templates = Jinja2Templates(directory="templates")
+
+@app.get("/styles.css")
+def styles():
+    return FileResponse("templates/styles.css", media_type="text/css")
+
+
 
 MEAL_TYPES = ["Sarapan", "Makan Siang", "Makan malam", "Camilan"]
 

@@ -48,3 +48,11 @@ button.primary { width:100%; margin-top:16px; padding:12px; border:0; border-rad
 .vals { display:flex; gap:6px; margin-top:4px; } .vals div { flex:1; text-align:center; font-size:.75rem; }
 .note { background:#fff8e1; border:1px solid #f0e0a0; border-radius:8px; padding:10px; font-size:.85rem; }
 a.btn { color:var(--accent); }
+
+/* micronutrient card */
+.card-title { display:block; margin-bottom:4px; }
+.goal .top b { font-variant-numeric: tabular-nums; }
+.tag { font-style:normal; font-size:.7rem; color:var(--muted); border:1px solid var(--line);
+       border-radius:999px; padding:1px 6px; margin-left:4px; }
+.est { font-size:.78rem; margin-top:4px; }
+.foot { margin:16px 0 0; padding-top:12px; border-top:1px solid var(--line); }

@@ -64,13 +64,13 @@
 
   {% if micros %}
   <section class="card">
-    <strong>Mikronutrien hari ini</strong>
+    <strong class="card-title">Mikronutrien hari ini</strong>
     {% for m in micros %}
     <div class="goal">
       <div class="top"><span>{{ m.label }}</span>
         <span><b>{{ "%.1f"|format(m.total) }}</b> / {{ m.ref }} {{ m.unit }}{% if m.limit %} (batas){% endif %}</span></div>
       <div class="bar {% if m.limit and m.total > m.ref %}over{% endif %}"><span style="width:{{ [100, 100 * m.total / m.ref]|min|round(0) }}%"></span></div>
-      {% if m.imputed_pct >= 1 %}<div class="sub">{{ "%.0f"|format(m.imputed_pct) }}% dari nilai perkiraan (imputasi)</div>{% endif %}
+      {% if m.imputed_pct >= 1 %}<div class="sub est">~ {{ "%.0f"|format(m.imputed_pct) }}% dari nilai perkiraan (imputasi)</div>{% endif %}
     </div>
     {% endfor %}
     <p class="sub">Hanya bahan yang punya data mikronutrien yang dihitung, jadi angkanya batas bawah. {% if akg %}Acuan: AKG 2019 untuk {{ "laki-laki" if akg.sex == "m" else "perempuan" }} {% if akg.age_max|int >= 100 %}80+{% else %}{{ akg.age_min }}&ndash;{{ akg.age_max }}{% endif %} th (natrium: angka AKG, dipakai sebagai batas).{% else %}Acuan umum dewasa, belum ada profil. <a href="/settings">Isi profil</a> untuk angka AKG.{% endif %} Bukan saran medis.</p>
