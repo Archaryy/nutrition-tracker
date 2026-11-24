@@ -73,7 +73,7 @@
       {% if m.imputed_pct >= 1 %}<div class="sub">{{ "%.0f"|format(m.imputed_pct) }}% dari nilai perkiraan (imputasi)</div>{% endif %}
     </div>
     {% endfor %}
-    <p class="sub">Hanya bahan yang punya data mikronutrien yang dihitung, jadi angkanya batas bawah. Acuan dewasa kasar, bukan saran medis.</p>
+    <p class="sub">Hanya bahan yang punya data mikronutrien yang dihitung, jadi angkanya batas bawah. {% if akg %}Acuan: AKG 2019 untuk {{ "laki-laki" if akg.sex == "m" else "perempuan" }} {% if akg.age_max|int >= 100 %}80+{% else %}{{ akg.age_min }}&ndash;{{ akg.age_max }}{% endif %} th (natrium: angka AKG, dipakai sebagai batas).{% else %}Acuan umum dewasa, belum ada profil. <a href="/settings">Isi profil</a> untuk angka AKG.{% endif %} Bukan saran medis.</p>
   </section>
   {% endif %}
 

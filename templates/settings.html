@@ -42,6 +42,25 @@
   </section>
 
   <section class="card">
+    <strong>Profil untuk acuan mikronutrien</strong>
+    <p class="sub">Dipakai untuk memilih angka AKG 2019 (Permenkes 28/2019) di kartu mikronutrien. Belum mencakup ibu hamil/menyusui.</p>
+    <form method="post" action="/profile">
+      <div class="row">
+        <div><label for="p_sex">Jenis kelamin</label>
+          <select id="p_sex" name="sex">
+            <option value="m" {% if profile and profile.sex == 'm' %}selected{% endif %}>Laki-laki</option>
+            <option value="f" {% if profile and profile.sex == 'f' %}selected{% endif %}>Perempuan</option>
+          </select></div>
+        <div><label for="p_age">Umur</label>
+          <input id="p_age" name="age" type="number" min="13" max="120" value="{{ profile.age if profile else '' }}" required></div>
+      </div>
+      <button class="primary" type="submit">Simpan profil</button>
+    </form>
+    {% if profile and not akg %}<p class="note">Umur ini belum ada di tabel acuan; angka umum dipakai.</p>{% endif %}
+  </section>
+
+  
+  <section class="card">
     <strong>Target harian</strong>
     <form method="post" action="/settings">
       <label for="kcal">Kalori (kcal)</label>

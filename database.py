@@ -30,6 +30,12 @@ def init_db():
             imputed INTEGER NOT NULL DEFAULT 0,
             PRIMARY KEY (ingredient_id, nutrient)
         );
+        
+        CREATE TABLE IF NOT EXISTS profile (
+            id INTEGER PRIMARY KEY CHECK (id = 1),
+            sex TEXT NOT NULL CHECK (sex IN ('m', 'f')),
+            age INTEGER NOT NULL
+        );
 
         CREATE TABLE IF NOT EXISTS dishes (
             id INTEGER PRIMARY KEY AUTOINCREMENT,

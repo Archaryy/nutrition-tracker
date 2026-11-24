@@ -3,6 +3,7 @@ from fastapi import FastAPI, Form, HTTPException, Request
 from fastapi.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
 from database import get_connection, init_db
+import csv
 
 app = FastAPI()
 templates = Jinja2Templates(directory="templates")
@@ -108,10 +109,38 @@ GROUP BY im.nutrient
 """
 
 
-def day_micros(conn, day):
+def load_akg(path="akg.csv"):
+    """AKG 2019 (Permenkes 28/2019, Tabel 1-3), adults and teens, as a list of rows."""
+    try:
+        with open(path, newline="", encoding="utf-8-sig") as f:
+            return list(csv.DictReader(f))
+    except FileNotFoundError:
+        return []
+
+
+AKG_ROWS = load_akg()
+
+
+def akg_for(profile):
+    """The AKG row for this person's sex and age, or None (then generic values are used)."""
+    if profile is None:
+        return None
+    for r in AKG_ROWS:
+        if r["sex"] == profile["sex"] and int(r["age_min"]) <= profile["age"] <= int(r["age_max"]):
+            return r
+    return None
+
+
+def get_profile(conn):
+    return conn.execute("SELECT sex, age FROM profile WHERE id = 1").fetchone()
+
+
+def day_micros(conn, day, akg=None):
     found = {r["nutrient"]: r for r in conn.execute(MICRO_SQL, (day.isoformat(),))}
     out = []
     for key, (label, unit, ref) in MICROS.items():
+        if akg is not None and akg.ge(key, "") != "":
+            ref = float(akg[key])
         r = found.get(key)
         total = r["total"] if r else 0.0
         out.append({"label": label, "unit": unit, "ref": ref, "total": total,
@@ -130,7 +159,8 @@ def home(request: Request, day: str =""):
             "SELECT id, name, serving_label FROM dishes ORDER BY name"
         ).fetchall()
         targets = get_targets(conn)
-        micros = day_micros(conn, shown) if entries else []
+        akg = akg_for(get_profile(conn))
+        micros = day_micros(conn, shown, akg) if entries else []
         totals = {
             key: sum(e[key] for e in entries) for key in ("kcal", "protein", "carbs", "fat")
         }
@@ -145,6 +175,7 @@ def home(request: Request, day: str =""):
         "dishes": dishes,
         "totals": totals,
         "micros": micros,
+        "akg": akg,
         "meal_types": MEAL_TYPES,
         "default_meal": default_meal_type(now),
         "now_time": now.strftime("%H:%M"),
@@ -234,6 +265,7 @@ def settings(request: Request, saved: int = 0, sex: str = "", age: str = "", wei
              height: str = "", activity: str = "1.375", goal: str = "maintain"):
     with get_connection() as conn:
         current = get_targets(conn)
+        profile = get_profile(conn)
     form = dict(current) if current else {"kcal": "", "protein": "", "carbs": "", "fat": ""}
     suggestion = None
     a, w, h, act = _float(age), _float(weight), _float(height), _float(activity)
@@ -242,7 +274,8 @@ def settings(request: Request, saved: int = 0, sex: str = "", age: str = "", wei
         suggestion = suggest_targets(sex, a, w, h, act, goal)
         form = suggestion
     return templates.TemplateResponse(request, "settings.html", {
-        "page": "settings", "saved": bool(saved), "form": form, "suggestion": suggestion,
+        "page": "settings", "saved": bool(saved), "profile": profile,
+        "akg": akg_for(profile), "form": form, "suggestion": suggestion,
         "activities": ACTIVITIES, "goals": GOALS,
         "calc": {"sex": sex or "m", "age": age, "weight": weight, "height": height,
                  "activity": activity, "goal": goal},
@@ -260,4 +293,15 @@ def save_settings(kcal: float = Form(...), protein: float = Form(...),
                ON CONFLICT(id) DO UPDATE SET kcal=excluded.kcal, protein=excluded.protein,
                carbs=excluded.carbs, fat=excluded.fat""",
             (kcal, protein, carbs, fat))
+    return RedirectResponse("/settings?saved=1", status_code=303)
+
+@app.post("/profile")
+def save_profile(sex: str = Form(...), age: int = Form(...)):
+    if sex not in ("m", "f") or not 13 <= age <= 120:
+        raise HTTPException(status_code=400, detail="Profil tidak valid")
+    with get_connection() as conn:
+        conn.execute(
+            """INSERT INTO profile (id, sex, age) VALUES (1, ?, ?)
+               ON CONFLICT(id) DO UPDATE SET sex=excluded.sex, age=excluded.age""",
+            (sex, age))
     return RedirectResponse("/settings?saved=1", status_code=303)
