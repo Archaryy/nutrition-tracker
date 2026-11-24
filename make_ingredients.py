@@ -14,6 +14,12 @@ with open(TKPI_FILE, newline="", encoding="utf-8-sig") as f:
 if not os.path.exists(PICKS_FILE):
     sys.exit(f"{PICKS_FILE} not found. Create it with lines like:  AP001 = Nasi putih")
 
+FOODS_FILE = "foods.csv"            # built by build_foods.py (TKPI + MyFCD)
+foods = {}
+if os.path.exists(FOODS_FILE):
+    with open(FOODS_FILE, newline="", encoding="utf-8-sig") as f:
+        foods = {r["food_id"].lower(): r for r in csv.DictReader(f)}
+
 rows, names, problems = [], set(), []
 
 
@@ -31,7 +37,22 @@ with open(PICKS_FILE, encoding="utf-8-sig") as f:
         if not line:
             continue
         code, _, alias = line.partition("=")
-        code, alias = code.strip().upper(), alias.strip()
+        code, alias = code.strip(), alias.strip()
+        if code.lower().startswith(("myfcd_", "tkpi_")):
+            food = foods.get(code.lower())
+            if food is None:
+                problems.append(f"{PICKS_FILE} line {number}: {code!r} not found. "
+                                "Run build_foods.py first, then food_search.py.")
+                continue
+            if food["macros_imputed"] == "yes":
+                problems.append(f"{PICKS_FILE} line {number}: {code} {food['name']} has imputed "
+                                "macros (a group average, not a measurement). Use a measured "
+                                "food or put pack-label values in my_ingredients.csv.")
+                continue
+            add(alias or food["name"], food["kcal"], food["protein_g"], food["carbs_g"],
+                food["fat_g"], f"{food['source']} {code} via food-nutrition", f"{PICKS_FILE} line {number}")
+            continue
+        code = code.upper()
         food = tkpi.get(code)
         if food is None:
             problems.append(f"{PICKS_FILE} line {number}: {code!r} is not a TKPI code")
