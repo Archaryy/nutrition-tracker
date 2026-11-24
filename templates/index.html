@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Food Tracker</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<main>
+    <h1>Food Tracker</h1>
+    <div class="daynav">
+        <a href="/?day={{prev_day.isoformat()}}">&larr; {{ prev_day.strftime("%d %b")}}</a>
+        <strong>
+            {% if is_today %}Hari ini, {% endif %}{{ day.strftime("%a %d %b %y") }}
+        </strong>
+        <a href="/?day= {{ next_day.isoformat() }}">{{ next_day.strftime("%d %b")}} &rarr;</a>
+    </div>
+
+    <section class="card">
+        <div class="kcal">{{ "%.0f"|format(totals.kcal) }} <small>kcal</small></div>
+        <div class="macros">
+        <span>Protein <b>{{ "%.0f"|format(totals.protein) }} g</b></span>
+        <span>Karbo <b>{{ "%.0f"|format(totals.carbs) }} g</b></span>
+        <span>Lemak <b>{{ "%.0f"|format(totals.fat) }} g</b></span>
+        </div>
+    </section>
+
+    <section class="card">
+    {% if entries %}
+    <table>
+      <thead><tr><th>Makanan</th><th class="num">kcal</th><th></th></tr></thead>
+      <tbody>
+      {% for e in entries %}
+        <tr>
+          <td>
+            {{ e.name }}
+            <div class="sub">{{ e.eaten_at[11:16] }} &middot; {{ e.meal_type }} &middot;
+              {{ "%g"|format(e.servings) }} &times; {{ e.serving_label }}</div>
+          </td>
+          <td class="num">{{ "%.0f"|format(e.kcal) }}</td>
+          <td class="num">
+            <form class="inline" method="post" action="/delete/{{ e.id }}"
+                  onsubmit="return confirm('Hapus entri ini?')">
+              <input type="hidden" name="day" value="{{ day.isoformat() }}">
+              <button class="link" type="submit" aria-label="Hapus">Hapus</button>
+            </form>
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <p class="empty">Belum ada catatan untuk hari ini.</p>
+    {% endif %}
+  </section>
+
+  <section class="card">
+    {% if dishes %}
+    <form method="post" action="/log">
+      <input type="hidden" name="day" value="{{ day.isoformat() }}">
+      <label for="dish_id">Makanan</label>
+      <select id="dish_id" name="dish_id" required>
+        {% for d in dishes %}
+        <option value="{{ d.id }}">{{ d.name }} ({{ d.serving_label }})</option>
+        {% endfor %}
+      </select>
+      <div class="row">
+        <div>
+          <label for="servings">Porsi</label>
+          <input id="servings" name="servings" type="number" step="0.25" min="0.25" max="20" value="1" required>
+        </div>
+        <div>
+          <label for="time">Jam</label>
+          <input id="time" name="time" type="time" value="{{ now_time }}" required>
+        </div>
+      </div>
+      <label for="meal_type">Waktu makan</label>
+      <select id="meal_type" name="meal_type">
+        {% for m in meal_types %}
+        <option {% if m == default_meal %}selected{% endif %}>{{ m }}</option>
+        {% endfor %}
+      </select>
+      <button class="primary" type="submit">Catat</button>
+    </form>
+    {% else %}
+    <p class="empty">Belum ada makanan di database. Jalankan <code>python import_data.py</code> dulu (Step 3).</p>
+    {% endif %}
+  </section>
+</main>
+</body>
+</html>

@@ -1,7 +1,66 @@
-# code = my own short name
+# Starter set. Delete lines you do not need and add your own with tkpi_search.py
+# --- Nasi, mi, roti, umbi
+AP002 = Nasi putih      # TKPI 'Nasi tim': 120 kcal, 71% water (soft rice). Swap to AP001 if your rice is drier
+AP001 = Nasi putih padat      # TKPI 'Nasi': 180 kcal, 57% water (firm rice). Not used by the starter recipes
+AR001 = Beras mentah
+AP006 = Bihun      # dry
+AP021 = Mi basah
+AP024 = Roti putih
+AP025 = Tepung terigu
+BR013 = Kentang
+BR016 = Singkong
+BR028 = Ubi jalar
 
-AP001 = Nasi putih
+# --- Protein
+HR002 = Telur ayam      # ras, whole egg
+FR005 = Ayam mentah      # fatty cut: 25 g fat per 100 g. Search for the cut you really eat
+FR026 = Daging sapi      # medium fat
+GR007 = Ikan bandeng
+GR050 = Ikan kembung
+GR070 = Ikan tongkol
+GR084 = Udang
+GR003 = Cumi
+GP004 = Ikan asin
+CP077 = Tempe      # raw. Fried tempe = raw tempe + oil, see recipes
+CP061 = Tahu      # raw. Fried tofu = raw tofu + oil, see recipes
+
+# --- Fats, coconut, nuts
 KR012 = Minyak goreng
-HR002 = Telur ayam
-CP062 = Tahu goreng
+KP003 = Santan      # with water
+KR002 = Kelapa parut
+CP012 = Kacang tanah goreng
+
+# --- Vegetables
 DR100 = Kangkung
+DR008 = Bayam
+DR166 = Wortel
+DR141 = Sawi hijau
+DR148 = Taoge
+DR044 = Daun kubis
+DR013 = Buncis
+DR097 = Kacang panjang
+DR161 = Tomat
+DR109 = Ketimun
+AR015 = Jagung muda
+
+# --- Seasoning
+NR007 = Bawang merah
+NR008 = Bawang putih
+DR007 = Bawang bombay
+NR014 = Cabai merah
+NR015 = Cabai rawit
+NP011 = Terasi
+NP009 = Saos tomat
+
+# --- Sweet, snacks, drinks, fruit
+MP007 = Gula pasir      # TKPI calls it 'Gula putih'
+MP005 = Gula aren
+BP042 = Kerupuk      # kemplang, fried
+JR006 = Susu sapi      # fresh
+JP007 = Susu kental manis
+ER074 = Pisang ambon
+ER004 = Apel
+ER039 = Jeruk manis
+ER054 = Mangga
+ER105 = Semangka
+ER067 = Melon
