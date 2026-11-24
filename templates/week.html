@@ -36,4 +36,20 @@
     <p class="empty">Belum ada catatan di minggu ini.</p>
     {% endif %}
   </section>
+
+  {% if micros %}
+  <section class="card">
+    <strong class="card-title">Mikronutrien rata-rata per hari</strong>
+    {% for m in micros %}
+    <div class="goal">
+      <div class="top"><span>{{ m.label }}</span>
+        <span><b>{{ "%.1f"|format(m.avg) }}</b> / {{ "%g"|format(m.ref) }} {{ m.unit }}{% if m.limit %} <em class="tag">batas</em>{% endif %}</span></div>
+      <div class="bar {% if m.limit and m.avg > m.ref %}over{% endif %}"><span style="width:{{ [100, 100 * m.avg / m.ref]|min|round(0) }}%"></span></div>
+      <div class="sub est">{{ m.hit }} dari {{ m.days }} hari {% if m.limit %}di bawah batas{% else %}mencapai acuan{% endif %}</div>
+    </div>
+    {% endfor %}
+    <p class="sub foot">Hanya bahan yang punya data mikronutrien yang dihitung, jadi angkanya batas bawah.
+      {% if akg %}Acuan: AKG 2019.{% else %}Acuan umum dewasa; <a href="/settings">isi profil</a> untuk angka AKG.{% endif %} Bukan saran medis.</p>
+  </section>
+  {% endif %}
 {% endblock %}

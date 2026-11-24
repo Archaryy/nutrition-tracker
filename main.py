@@ -12,8 +12,6 @@ templates = Jinja2Templates(directory="templates")
 def styles():
     return FileResponse("templates/styles.css", media_type="text/css")
 
-
-
 MEAL_TYPES = ["Sarapan", "Makan Siang", "Makan malam", "Camilan"]
 
 init_db()
@@ -154,6 +152,34 @@ def day_micros(conn, day, akg=None):
                     "limit": key == "sodium_mg"})
     return out
 
+WEEK_MICRO_SQL = """
+SELECT date(m.eaten_at) AS day, im.nutrient,
+       SUM(m.servings * im.per_100g * di.grams / 100.0) AS total
+FROM meal_log m
+JOIN dish_ingredients di ON di.dish_id = m.dish_id
+JOIN ingredient_micros im ON im.ingredient_id = di.ingredient_id
+WHERE date(m.eaten_at) BETWEEN ? AND ?
+GROUP BY day, im.nutrient
+"""
+
+
+def week_micros(conn, first, last, logged_days, akg=None):
+    """Average per logged day, and on how many logged days the reference was reached."""
+    if not logged_days:
+        return []
+    per_day = {}
+    for r in conn.execute(WEEK_MICRO_SQL, (first.isoformat(), last.isoformat())):
+        per_day[(r["day"], r["nutrient"])] = r["total"]
+    out = []
+    for key, (label, unit, ref) in MICROS.items():
+        if akg is not None and akg.get(key, "") != "":
+            ref = float(akg[key])
+        totals = [per_day.get((d, key), 0.0) for d in logged_days]
+        limit = key == "sodium_mg"
+        hit = sum(1 for t in totals if (t <= ref if limit else t >= ref))
+        out.append({"label": label, "unit": unit, "ref": ref, "limit": limit,
+                    "avg": sum(totals) / len(totals), "hit": hit, "days": len(totals)})
+    return out
 
 @app.get("/")
 def home(request: Request, day: str =""):
@@ -242,6 +268,8 @@ def week(request: Request, end: str = ""):
     with get_connection() as conn:
         rows = {r["day"]: r for r in conn.execute(DAILY_SQL, (first.isoformat(), last.isoformat()))}
         targets = get_targets(conn)
+        akg = akg_for(get_profile(conn))
+        micros = week_micros(conn, first, last, sorted(rows), akg)
     days = []
     for n in range(7):
         d = first + timedelta(days=n)
@@ -254,7 +282,7 @@ def week(request: Request, end: str = ""):
     scale = max([d["kcal"] for d in days] + [targets["kcal"] if targets else 0, 1]) * 1.1
     return templates.TemplateResponse(request, "week.html", {
         "page": "week", "days": days, "targets": targets, "avg": avg,
-        "logged_days": len(logged), "scale": scale,
+        "logged_days": len(logged), "scale": scale, "micros": micros, "akg": akg,
         "prev_end": last - timedelta(days=7), "next_end": last + timedelta(days=7),
     })
 
