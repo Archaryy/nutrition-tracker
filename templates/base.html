@@ -1,21 +1,64 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="id">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Food Tracker</title>
-    <link rel="stylesheet" href="styles.css">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Food Tracker</title>
+  <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
 <main>
+  <header class="topbar">
     <h1>Food Tracker</h1>
-    <nav class="tabs">
-      <a href="/" class="{% if page == 'today' %}on{% endif %}">Harian</a>
-      <a href="/week" class="{% if page == 'week' %}on{% endif %}">7 hari</a>
-      <a href="/photo" class="{% if page == 'photo' %}on{% endif %}">Foto</a>
-      <a href="/settings" class="{% if page == 'settings' %}on{% endif %}">Target</a>
-    </nav>
-{% block content %}{% endblock %}
+    <span class="page-badge">
+      {% if page == 'today' %}Harian
+      {% elif page == 'week' %}7 Hari
+      {% elif page == 'photo' %}Foto
+      {% elif page == 'settings' %}Target
+      {% endif %}
+    </span>
+  </header>
+  {% block content %}{% endblock %}
 </main>
+
+<div class="bottom-dock">
+  <div class="bottom-dock-inner">
+    {% block bottom_nav %}{% endblock %}
+    <nav class="tabs" aria-label="Navigasi utama">
+      <a href="/" class="{% if page == 'today' %}on{% endif %}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <rect x="3" y="4" width="18" height="18" rx="2"/>
+          <line x1="16" y1="2" x2="16" y2="6"/>
+          <line x1="8" y1="2" x2="8" y2="6"/>
+          <line x1="3" y1="10" x2="21" y2="10"/>
+        </svg>
+        <span>Harian</span>
+      </a>
+      <a href="/week" class="{% if page == 'week' %}on{% endif %}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <line x1="18" y1="20" x2="18" y2="10"/>
+          <line x1="12" y1="20" x2="12" y2="4"/>
+          <line x1="6" y1="20" x2="6" y2="14"/>
+        </svg>
+        <span>7 hari</span>
+      </a>
+      <a href="/photo" class="{% if page == 'photo' %}on{% endif %}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+          <circle cx="12" cy="13" r="4"/>
+        </svg>
+        <span>Foto</span>
+      </a>
+      <a href="/settings" class="{% if page == 'settings' %}on{% endif %}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <circle cx="12" cy="12" r="9"/>
+          <circle cx="12" cy="12" r="4"/>
+          <line x1="12" y1="3" x2="12" y2="5"/>
+        </svg>
+        <span>Target</span>
+      </a>
+    </nav>
+  </div>
+</div>
 </body>
 </html>

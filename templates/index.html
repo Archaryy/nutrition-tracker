@@ -6,7 +6,7 @@
         <strong>
             {% if is_today %}Hari ini, {% endif %}{{ day.strftime("%a %d %b %y") }}
         </strong>
-        <a href="/?day= {{ next_day.isoformat() }}">{{ next_day.strftime("%d %b")}} &rarr;</a>
+        <a href="/?day={{ next_day.isoformat() }}">{{ next_day.strftime("%d %b") }} &rarr;</a>
     </div>
 
     <section class="card">
