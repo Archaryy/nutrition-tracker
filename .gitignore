@@ -7,3 +7,6 @@ env/
 __pycache__/
 *.py[cod]
 *$py.class
+
+# meal photos stay on your computer
+photos/

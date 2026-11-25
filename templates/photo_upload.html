@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block content %}
+  <section class="card">
+    <strong class="card-title">Foto makanan</strong>
+    <p class="sub">Foto dianalisis di komputer ini oleh model lokal ({{ model }}). Hasilnya perkiraan; kamu akan memeriksa dan mengoreksinya sebelum disimpan.</p>
+    <form method="post" action="/photo" enctype="multipart/form-data">
+      <label for="photo">Ambil atau pilih foto</label>
+      <input id="photo" name="photo" type="file" accept="image/*" capture="environment" required>
+      <button class="primary" type="submit" onclick="this.textContent='Menganalisis... (bisa sampai beberapa menit)'">Analisis foto</button>
+    </form>
+  </section>
+{% endblock %}

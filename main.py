@@ -1,9 +1,13 @@
 from datetime import date, datetime, timedelta
-from fastapi import FastAPI, Form, HTTPException, Request
-from fastapi.responses import FileResponse, RedirectResponse
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
+from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from database import get_connection, init_db
+from food_match import load_foods, suggest, user_foods, CONFIDENT
+import base64
 import csv
+import os
+import photo_ai
 
 app = FastAPI()
 templates = Jinja2Templates(directory="templates")
@@ -339,3 +343,148 @@ def save_profile(sex: str = Form(...), age: int = Form(...)):
                ON CONFLICT(id) DO UPDATE SET sex=excluded.sex, age=excluded.age""",
             (sex, age))
     return RedirectResponse("/settings?saved=1", status_code=303)
+
+
+
+_FOODS_CSV = load_foods()   # loaded once at startup
+
+
+@app.get("/photo")
+def photo_upload(request: Request):
+    """Show the photo upload form."""
+    return templates.TemplateResponse(request, "photo_upload.html", {
+        "page": "photo",
+        "model": os.environ.get("OLLAMA_MODEL", "qwen2.5vl:7b"),
+    })
+
+
+@app.post("/photo")
+async def photo_analyze(request: Request, photo: UploadFile = File(...)):
+    """Receive the uploaded image, run Ollama, show the review form."""
+    image_bytes = await photo.read()
+    photo_b64 = base64.b64encode(image_bytes).decode("ascii")
+    photo_src = f"data:{photo.content_type or 'image/jpeg'};base64,{photo_b64}"
+
+    error = None
+    detected = []
+    try:
+        detected = photo_ai.analyze(image_bytes)
+    except photo_ai.PhotoAIError as exc:
+        error = str(exc)
+
+    with get_connection() as conn:
+        all_foods = user_foods(conn) + _FOODS_CSV
+        options = [r["name"] for r in all_foods]
+
+    rows = []
+    # pad to at least 5 rows so the user can add items manually
+    for i in range(max(len(detected), 5)):
+        item = detected[i] if i < len(detected) else None
+        seen = item["name"] if item else ""
+        grams = int(item["grams"]) if item else ""
+        matches = suggest(seen, all_foods) if seen else []
+        best_score, best = matches[0] if matches else (0, None)
+        pick = best["name"] if best and best_score >= CONFIDENT else ""
+        guess = best["name"] if best and best_score < CONFIDENT else ""
+        rows.append({"seen": seen, "grams": grams, "pick": pick, "guess": guess})
+
+    now = datetime.now()
+    return templates.TemplateResponse(request, "photo_review.html", {
+        "page": "photo",
+        "photo": photo_b64,
+        "photo_src": photo_src,
+        "error": error,
+        "rows": rows,
+        "options": options,
+        "day": date.today().isoformat(),
+        "now_time": now.strftime("%H:%M"),
+        "default_meal": default_meal_type(now),
+        "meal_types": MEAL_TYPES,
+    })
+
+
+@app.post("/photo/save")
+async def photo_save(request: Request):
+    """Save the reviewed items from the photo as individual meal-log entries."""
+    form = await request.form()
+    day = parse_day(form.get("day", ""))
+    time_str = form.get("time", datetime.now().strftime("%H:%M"))
+    meal_type = form.get("meal_type", MEAL_TYPES[0])
+
+    try:
+        eaten_at = datetime.strptime(f"{day.isoformat()} {time_str}", "%Y-%m-%d %H:%M")
+    except ValueError:
+        eaten_at = datetime.combine(day, datetime.now().time())
+
+    with get_connection() as conn:
+        all_foods = user_foods(conn) + _FOODS_CSV
+        name_to_food = {r["name"]: r for r in all_foods}
+
+        i = 0
+        while True:
+            food_name = (form.get(f"food_{i}") or "").strip()
+            grams_raw = (form.get(f"grams_{i}") or "").strip()
+            if food_name == "" and grams_raw == "" and i >= 5:
+                break
+            if not food_name or not grams_raw:
+                i += 1
+                continue
+
+            try:
+                grams = float(grams_raw)
+            except ValueError:
+                i += 1
+                continue
+
+            food = name_to_food.get(food_name)
+            if food is None:
+                i += 1
+                continue
+
+            food_id = food["food_id"]   # e.g. "ing_12" or "tkpi_0395"
+            dish_name = food_name
+
+            if food_id.startswith("ing_"):
+                ing_id = int(food_id.split("_")[1])
+            else:
+                # CSV food — look up or create the ingredient row
+                existing_ing = conn.execute(
+                    "SELECT id FROM ingredients WHERE name = ?", (dish_name,)).fetchone()
+                if existing_ing:
+                    ing_id = existing_ing["id"]
+                else:
+                    cur = conn.execute(
+                        """INSERT INTO ingredients
+                           (name, kcal_per_100g, protein_per_100g, carbs_per_100g, fat_per_100g)
+                           VALUES (?, ?, ?, ?, ?)""",
+                        (dish_name,
+                         float(food.get("kcal") or 0),
+                         float(food.get("protein_g") or 0),
+                         float(food.get("carbs_g") or 0),
+                         float(food.get("fat_g") or 0)))
+                    ing_id = cur.lastrowid
+
+            # Look up or create a single-ingredient dish by name
+            dish = conn.execute(
+                "SELECT id FROM dishes WHERE name = ?", (dish_name,)).fetchone()
+            if dish is None:
+                cur = conn.execute(
+                    "INSERT INTO dishes (name, serving_label) VALUES (?, '1 porsi')",
+                    (dish_name,))
+                dish_id = cur.lastrowid
+                conn.execute(
+                    "INSERT INTO dish_ingredients (dish_id, ingredient_id, grams) VALUES (?, ?, ?)",
+                    (dish_id, ing_id, grams))
+            else:
+                dish_id = dish["id"]
+                conn.execute(
+                    "UPDATE dish_ingredients SET grams = ? WHERE dish_id = ? AND ingredient_id = ?",
+                    (grams, dish_id, ing_id))
+
+            # Log servings=1 (all portion info lives in dish_ingredients.grams)
+            conn.execute(
+                "INSERT INTO meal_log (eaten_at, meal_type, dish_id, servings) VALUES (?, ?, ?, ?)",
+                (eaten_at.strftime("%Y-%m-%d %H:%M"), meal_type, dish_id, 1))
+            i += 1
+
+    return RedirectResponse(f"/?day={day.isoformat()}", status_code=303)

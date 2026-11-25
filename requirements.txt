@@ -1,0 +1,11 @@
+# ── Web framework ─────────────────────────────────────────────────────────────
+fastapi>=0.111.0
+
+# Required by FastAPI to parse HTML Form data (Form(...) parameters)
+python-multipart>=0.0.9
+
+# ── Templating ────────────────────────────────────────────────────────────────
+jinja2>=3.1.4
+
+# ── ASGI server (run the app with: uvicorn main:app --reload) ─────────────────
+uvicorn[standard]>=0.29.0

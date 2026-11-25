@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block content %}
+  {% if error %}<p class="note">{{ error }} Kamu tetap bisa mengisi makanannya sendiri di bawah.</p>{% endif %}
+  <section class="card">
+    <img src="{{ photo_src }}" alt="Foto makanan" class="meal-photo">
+    <p class="sub">Periksa tiap baris. Ketik untuk mencari makanan, lalu atur beratnya (gram). Kosongkan baris yang salah.</p>
+  </section>
+
+  <form method="post" action="/photo/save">
+    <input type="hidden" name="photo" value="{{ photo }}">
+    <datalist id="foods">{% for o in options %}<option value="{{ o }}">{% endfor %}</datalist>
+    <section class="card">
+      {% for r in rows %}
+      <div class="photo-row">
+        {% if r.seen %}<div class="sub">Terdeteksi: <b>{{ r.seen }}</b></div>{% else %}<div class="sub">Tambah makanan</div>{% endif %}
+        <div class="row">
+          <div style="flex:3"><input name="food_{{ loop.index0 }}" list="foods" value="{{ r.pick }}" placeholder="{{ 'Mungkin: ' ~ r.guess if r.guess else 'Cari makanan' }}" autocomplete="off"></div>
+          <div style="flex:1"><input name="grams_{{ loop.index0 }}" type="number" min="1" max="2000" step="1" value="{{ r.grams }}" placeholder="gram"></div>
+        </div>
+        {% if r.seen and not r.pick %}<div class="sub est">Belum ada kecocokan yang yakin. Pilih sendiri{% if r.guess %} (tebakan: {{ r.guess }}){% endif %}.</div>{% endif %}
+      </div>
+      {% endfor %}
+    </section>
+    <section class="card">
+      <div class="row">
+        <div><label for="day">Tanggal</label><input id="day" name="day" type="date" value="{{ day }}" required></div>
+        <div><label for="time">Jam</label><input id="time" name="time" type="time" value="{{ now_time }}" required></div>
+      </div>
+      <label for="meal_type">Waktu makan</label>
+      <select id="meal_type" name="meal_type">
+        {% for m in meal_types %}<option {% if m == default_meal %}selected{% endif %}>{{ m }}</option>{% endfor %}
+      </select>
+      <button class="primary" type="submit">Simpan ke catatan</button>
+    </section>
+  </form>
+{% endblock %}
