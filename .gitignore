@@ -10,3 +10,8 @@ __pycache__/
 
 # meal photos stay on your computer
 photos/
+
+my_ingredients.csv
+
+# model training
+eval/

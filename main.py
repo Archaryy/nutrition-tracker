@@ -8,6 +8,9 @@ import base64
 import csv
 import os
 import photo_ai
+import photo_memory
+import photo_log
+import re
 
 app = FastAPI()
 templates = Jinja2Templates(directory="templates")
@@ -147,7 +150,7 @@ def day_micros(conn, day, akg=None):
     found = {r["nutrient"]: r for r in conn.execute(MICRO_SQL, (day.isoformat(),))}
     out = []
     for key, (label, unit, ref) in MICROS.items():
-        if akg is not None and akg.ge(key, "") != "":
+        if akg is not None and akg.get(key, "") != "":
             ref = float(akg[key])
         r = found.get(key)
         total = r["total"] if r else 0.0
@@ -346,7 +349,25 @@ def save_profile(sex: str = Form(...), age: int = Form(...)):
 
 
 
-_FOODS_CSV = load_foods()   # loaded once at startup
+_FOODS_CSV = load_foods()   # loaded once at startup (foods with guessed macros are left out)
+
+
+def _catalog(conn):
+    """Your own foods first, then the catalog: (foods, labels, label->food, id->food).
+    A catalog food you already use (it became one of your ingredients) is listed only once,
+    under your ingredient, and its catalog code still points to it."""
+    mine = user_foods(conn)
+    mine_by_id = {f["food_id"]: f for f in mine}
+    imported = {}
+    for r in conn.execute("SELECT id, source FROM ingredients WHERE source IS NOT NULL"):
+        for code in re.findall(r"(?:tkpi|myfcd)_\d{4}", r["source"], re.I):
+            imported[code.lower()] = f"ing_{r['id']}"
+    foods = mine + [f for f in _FOODS_CSV if f["food_id"] not in imported]
+    labels, lookup = photo_log.label_map(foods)
+    by_id = {f["food_id"]: f for f in foods}
+    for code, ing in imported.items():
+        by_id[code] = mine_by_id[ing]
+    return foods, labels, lookup, by_id
 
 
 @app.get("/photo")
@@ -360,42 +381,51 @@ def photo_upload(request: Request):
 
 @app.post("/photo")
 async def photo_analyze(request: Request, photo: UploadFile = File(...)):
-    """Receive the uploaded image, run Ollama, show the review form."""
+    """Receive the uploaded image, run the vision model, show the review form."""
     image_bytes = await photo.read()
-    photo_b64 = base64.b64encode(image_bytes).decode("ascii")
-    photo_src = f"data:{photo.content_type or 'image/jpeg'};base64,{photo_b64}"
-
-    error = None
-    detected = []
-    try:
-        detected = photo_ai.analyze(image_bytes)
-    except photo_ai.PhotoAIError as exc:
-        error = str(exc)
+    photo_src = ("data:" + (photo.content_type or "image/jpeg") + ";base64,"
+                 + base64.b64encode(image_bytes).decode("ascii"))
 
     with get_connection() as conn:
-        all_foods = user_foods(conn) + _FOODS_CSV
-        options = [r["name"] for r in all_foods]
+        foods, labels, lookup, by_id = _catalog(conn)
+        label_of = {f["food_id"]: l for f, l in zip(foods, labels)}
+        usual = photo_memory.usual_foods(conn)
+        error, detected = None, []
+        try:
+            detected = photo_ai.analyze(image_bytes, usual)
+        except photo_ai.PhotoAIError as exc:
+            error = str(exc)
 
-    rows = []
-    # pad to at least 5 rows so the user can add items manually
-    for i in range(max(len(detected), 5)):
-        item = detected[i] if i < len(detected) else None
-        seen = item["name"] if item else ""
-        grams = int(item["grams"]) if item else ""
-        matches = suggest(seen, all_foods) if seen else []
-        best_score, best = matches[0] if matches else (0, None)
-        pick = best["name"] if best and best_score >= CONFIDENT else ""
-        guess = best["name"] if best and best_score < CONFIDENT else ""
-        rows.append({"seen": seen, "grams": grams, "pick": pick, "guess": guess})
+        kcal_map = {l.lower(): float(f["kcal"] or 0) for f, l in zip(foods, labels)}
+        rows = []
+        for item in detected:
+            seen, grams, why = item["name"], int(item["grams"]), ""
+            pick, guess = "", ""
+            known = photo_memory.recall(conn, seen)
+            if known and known["food_id"] in by_id:           # you taught us this one
+                pick = label_of[by_id[known["food_id"]]["food_id"]]
+                grams = int(known["grams"])
+                why = f"sesuai pilihanmu sebelumnya ({known['n']}x)"
+            else:
+                matches = suggest(seen, foods, alt=item.get("name_en"))
+                if matches:
+                    score, best = matches[0]
+                    if score >= CONFIDENT:
+                        pick = label_of[best["food_id"]]
+                    else:
+                        guess = label_of[best["food_id"]]
+            rows.append({"seen": seen, "grams": grams, "pick": pick, "guess": guess, "why": why})
+        for _ in range(2 if rows else 4):        # blank rows, for foods the model missed
+            rows.append({"seen": "", "grams": "", "pick": "", "guess": "", "why": ""})
 
     now = datetime.now()
     return templates.TemplateResponse(request, "photo_review.html", {
         "page": "photo",
-        "photo": photo_b64,
         "photo_src": photo_src,
         "error": error,
         "rows": rows,
-        "options": options,
+        "options": labels,
+        "kcal_map": kcal_map,
         "day": date.today().isoformat(),
         "now_time": now.strftime("%H:%M"),
         "default_meal": default_meal_type(now),
@@ -405,86 +435,33 @@ async def photo_analyze(request: Request, photo: UploadFile = File(...)):
 
 @app.post("/photo/save")
 async def photo_save(request: Request):
-    """Save the reviewed items from the photo as individual meal-log entries."""
+    """Save the reviewed rows: one log entry per food, and remember what you corrected."""
     form = await request.form()
     day = parse_day(form.get("day", ""))
     time_str = form.get("time", datetime.now().strftime("%H:%M"))
     meal_type = form.get("meal_type", MEAL_TYPES[0])
-
+    if meal_type not in MEAL_TYPES:
+        meal_type = MEAL_TYPES[0]
     try:
         eaten_at = datetime.strptime(f"{day.isoformat()} {time_str}", "%Y-%m-%d %H:%M")
     except ValueError:
         eaten_at = datetime.combine(day, datetime.now().time())
 
     with get_connection() as conn:
-        all_foods = user_foods(conn) + _FOODS_CSV
-        name_to_food = {r["name"]: r for r in all_foods}
-
-        i = 0
-        while True:
-            food_name = (form.get(f"food_{i}") or "").strip()
-            grams_raw = (form.get(f"grams_{i}") or "").strip()
-            if food_name == "" and grams_raw == "" and i >= 5:
-                break
-            if not food_name or not grams_raw:
-                i += 1
-                continue
-
+        _, _, lookup, by_id = _catalog(conn)
+        items, i = [], 0
+        while f"food_{i}" in form or f"grams_{i}" in form:
+            food = photo_log.find_food(form.get(f"food_{i}"), lookup, by_id)
             try:
-                grams = float(grams_raw)
+                grams = float(form.get(f"grams_{i}") or 0)
             except ValueError:
-                i += 1
-                continue
-
-            food = name_to_food.get(food_name)
-            if food is None:
-                i += 1
-                continue
-
-            food_id = food["food_id"]   # e.g. "ing_12" or "tkpi_0395"
-            dish_name = food_name
-
-            if food_id.startswith("ing_"):
-                ing_id = int(food_id.split("_")[1])
-            else:
-                # CSV food — look up or create the ingredient row
-                existing_ing = conn.execute(
-                    "SELECT id FROM ingredients WHERE name = ?", (dish_name,)).fetchone()
-                if existing_ing:
-                    ing_id = existing_ing["id"]
-                else:
-                    cur = conn.execute(
-                        """INSERT INTO ingredients
-                           (name, kcal_per_100g, protein_per_100g, carbs_per_100g, fat_per_100g)
-                           VALUES (?, ?, ?, ?, ?)""",
-                        (dish_name,
-                         float(food.get("kcal") or 0),
-                         float(food.get("protein_g") or 0),
-                         float(food.get("carbs_g") or 0),
-                         float(food.get("fat_g") or 0)))
-                    ing_id = cur.lastrowid
-
-            # Look up or create a single-ingredient dish by name
-            dish = conn.execute(
-                "SELECT id FROM dishes WHERE name = ?", (dish_name,)).fetchone()
-            if dish is None:
-                cur = conn.execute(
-                    "INSERT INTO dishes (name, serving_label) VALUES (?, '1 porsi')",
-                    (dish_name,))
-                dish_id = cur.lastrowid
-                conn.execute(
-                    "INSERT INTO dish_ingredients (dish_id, ingredient_id, grams) VALUES (?, ?, ?)",
-                    (dish_id, ing_id, grams))
-            else:
-                dish_id = dish["id"]
-                conn.execute(
-                    "UPDATE dish_ingredients SET grams = ? WHERE dish_id = ? AND ingredient_id = ?",
-                    (grams, dish_id, ing_id))
-
-            # Log servings=1 (all portion info lives in dish_ingredients.grams)
-            conn.execute(
-                "INSERT INTO meal_log (eaten_at, meal_type, dish_id, servings) VALUES (?, ?, ?, ?)",
-                (eaten_at.strftime("%Y-%m-%d %H:%M"), meal_type, dish_id, 1))
+                grams = 0
+            if food is not None and 0 < grams <= 2000:
+                items.append({"food": food, "grams": grams})
+                photo_memory.remember(conn, form.get(f"seen_{i}") or "", food["food_id"],
+                                      food["name"], grams)
             i += 1
+        if items:
+            photo_log.save_items(conn, items, eaten_at, meal_type)
 
     return RedirectResponse(f"/?day={day.isoformat()}", status_code=303)

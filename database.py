@@ -50,6 +50,14 @@ def init_db():
             grams REAL NOT NULL,
             PRIMARY KEY (dish_id, ingredient_id)
         );
+        CREATE TABLE IF NOT EXISTS photo_feedback (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            seen_key TEXT NOT NULL,
+            food_id TEXT NOT NULL,
+            food_name TEXT NOT NULL,
+            grams REAL NOT NULL,
+            created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
+        );
 
         CREATE TABLE IF NOT EXISTS meal_log (
             id INTEGER PRIMARY KEY AUTOINCREMENT,

@@ -1,8 +1,4 @@
 """Ask a local vision model (Ollama) what is on a meal photo.
-
-Setup (once):  install Ollama from ollama.com, then   ollama pull qwen2.5vl:7b
-Change the model with the OLLAMA_MODEL environment variable if your computer is small
-(for example OLLAMA_MODEL=qwen2.5vl:3b) or large. Nothing leaves your computer.
 """
 import base64
 import json
@@ -15,13 +11,27 @@ OLLAMA_URL = os.environ.get("OLLAMA_URL", "http://localhost:11434")
 MODEL = os.environ.get("OLLAMA_MODEL", "qwen2.5vl:7b")
 TIMEOUT = int(os.environ.get("OLLAMA_TIMEOUT", "300"))
 
-PROMPT = (
-    "You are a nutrition assistant. Look at this photo of a meal and list every separate "
-    "food or ingredient you can see. For each one give a short name in Indonesian (for "
-    "example 'nasi putih', 'ayam goreng', 'tempe goreng', 'sayur bayam') and your best "
-    "estimate of its cooked weight in grams. Do not invent items you cannot see. "
-    'Reply with JSON only, in exactly this shape: {"items": [{"name": "nasi putih", "grams": 150}]}'
-)
+PROMPT = """You are a nutrition assistant for an Indonesian user. Look at this photo of a meal.
+List every separate food you can see.
+
+Rules:
+- One entry per distinct food: the rice, each side dish, each vegetable, a sauce if it is clearly a separate portion. A single mixed dish (nasi goreng, soto, gado-gado) is ONE entry.
+- "name": a short Indonesian name that says how it was cooked, for example "ayam goreng" (not just "ayam"), "tempe goreng", "tahu bacem", "sayur bayam", "nasi putih", "telur dadar".
+- "name_en": the same food in plain English, for example "fried chicken".
+- "grams": your best estimate of the weight of that food on the plate, as eaten. Use size clues: a standard dinner plate is about 25 cm across; a level rice scoop is about 100 g and a heaped serving about 150-200 g; a palm-sized piece of cooked meat or fish is about 90 g; one egg is about 50 g.
+- Only list what you can see. Do not invent hidden ingredients and do not repeat a food.
+{hints}
+Reply with JSON only, exactly in this shape:
+{{"items": [{{"name": "nasi putih", "name_en": "steamed white rice", "grams": 150}}]}}"""
+
+
+def build_prompt(usual=()):
+    """The prompt, with the foods this person often eats as naming hints."""
+    hints = ""
+    if usual:
+        hints = ("Foods this person often eats (use these exact names when the photo shows the "
+                 "same food): " + ", ".join(usual[:20]) + "\n")
+    return PROMPT.format(hints=hints)
 
 
 class PhotoAIError(Exception):
@@ -29,7 +39,6 @@ class PhotoAIError(Exception):
 
 
 def parse_items(text):
-    """Turn the model's reply into [{'name': str, 'grams': float}], tolerating junk around it."""
     if not text:
         raise PhotoAIError("The model returned an empty answer.")
     match = re.search(r"\{.*\}", text, re.S)
@@ -53,18 +62,26 @@ def parse_items(text):
             grams = 100.0
         if not name:
             continue
-        items.append({"name": name[:80], "grams": min(max(grams, 1.0), 2000.0)})
-    return items[:15]
+        name_en = str(entry.get("name_en") or "").strip()[:80]
+        items.append({"name": name[:80], "name_en": name_en,
+                      "grams": min(max(grams, 1.0), 2000.0)})
+    seen, unique = set(), []
+    for it in items:
+        k = it["name"].lower()
+        if k not in seen:
+            seen.add(k)
+            unique.append(it)
+    return unique[:15]
 
 
-def analyze(image_bytes):
-    """Send the photo to Ollama and return the detected items."""
+def analyze(image_bytes, usual=()):
+    """Send the photo to Ollama and return the detected items. `usual` = foods you often eat."""
     payload = {
         "model": MODEL,
         "stream": False,
         "format": "json",
         "options": {"temperature": 0},
-        "messages": [{"role": "user", "content": PROMPT,
+        "messages": [{"role": "user", "content": build_prompt(usual),
                       "images": [base64.b64encode(image_bytes).decode("ascii")]}],
     }
     request = urllib.request.Request(

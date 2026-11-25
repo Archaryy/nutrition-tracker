@@ -12,6 +12,7 @@
     <section class="card">
       {% for r in rows %}
       <div class="photo-row">
+        <input type="hidden" name="seen_{{ loop.index0 }}" value="{{ r.seen }}">
         {% if r.seen %}<div class="sub">Terdeteksi: <b>{{ r.seen }}</b></div>{% else %}<div class="sub">Tambah makanan</div>{% endif %}
         <div class="row">
           <div style="flex:3"><input name="food_{{ loop.index0 }}" list="foods" value="{{ r.pick }}" placeholder="{{ 'Mungkin: ' ~ r.guess if r.guess else 'Cari makanan' }}" autocomplete="off"></div>
