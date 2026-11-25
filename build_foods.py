@@ -17,6 +17,14 @@ MICROS = ["fiber_g", "calcium_mg", "phosphorus_mg", "iron_mg", "sodium_mg", "pot
           "zinc_mg", "magnesium_mg", "vitamin_c_mg", "vitamin_b1_mg", "vitamin_b2_mg",
           "niacin_mg", "vitamin_b6_mg", "vitamin_b12_mcg", "cholesterol_mg",
           "saturated_fat_g", "sugars_total_g"]
+
+# Highest value (per 100 g) a real food could have. Anything above is a data error in the
+# source (e.g. myfcd_0006 lists 2608 mg zinc), so it is left blank instead of copied.
+CEILING = {"fiber_g": 100, "calcium_mg": 10000, "phosphorus_mg": 5000, "iron_mg": 200,
+           "sodium_mg": 40000, "potassium_mg": 20000, "zinc_mg": 200, "magnesium_mg": 2000,
+           "vitamin_c_mg": 5000, "vitamin_b1_mg": 50, "vitamin_b2_mg": 50, "niacin_mg": 200,
+           "vitamin_b6_mg": 50, "vitamin_b12_mcg": 1000, "cholesterol_mg": 5000,
+           "saturated_fat_g": 100, "sugars_total_g": 100}
 OUT = "foods.csv"
 
 
@@ -49,6 +57,7 @@ def main():
     columns = (["food_id", "name", "source", "category", "kcal", "protein_g", "carbs_g",
                 "fat_g", "macros_imputed", "imputed_micros", "imputed_fields"] + MICROS)
     rows = []
+    dropped = []
     for r in final:
         obs = observed.get(r["food_id"], {})
         imputed_macro = any(blank(obs.get(k)) for k in MACROS)
@@ -63,12 +72,17 @@ def main():
             row[dst] = round(float(r[src]), 1) if not blank(r[src]) else ""
         for k in MICROS:
             row[k] = round(float(r[k]), 3) if not blank(r[k]) else ""
+            if row[k] != "" and row[k] > CEILING[k]:
+                dropped.append(f"{r['food_id']} {row['name']}: {k} = {row[k]}")
+                row[k] = ""
         rows.append(row)
 
     with open(OUT, "w", newline="", encoding="utf-8") as f:
         w = csv.DictWriter(f, fieldnames=columns)
         w.writeheader()
         w.writerows(rows)
+    for line in dropped:
+        print("Dropped impossible value:", line)
     safe = sum(1 for r in rows if r["macros_imputed"] == "no")
     print(f"Wrote {len(rows)} foods to {OUT}; {safe} have fully measured macros, "
           f"{len(rows) - safe} have imputed macros.")

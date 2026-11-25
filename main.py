@@ -12,7 +12,7 @@ templates = Jinja2Templates(directory="templates")
 def styles():
     return FileResponse("templates/styles.css", media_type="text/css")
 
-MEAL_TYPES = ["Sarapan", "Makan Siang", "Makan malam", "Camilan"]
+MEAL_TYPES = ["Sarapan", "Makan Siang", "Makan Malam", "Camilan"]
 
 init_db()
 
