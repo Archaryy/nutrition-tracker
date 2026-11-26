@@ -2,6 +2,12 @@
 {% block title %}Catat · Food Tracker{% endblock %}
 {% block heading %}Catat makanan{% endblock %}
 {% block content %}
+<div class="cols">
+<section class="panel fit">
+  <h2 style="margin-top:0">Catat manual</h2>
+  <p style="margin:.2rem 0 0;font-size:1.15rem;font-weight:650">Pilih makanan yang sudah tersimpan, tentukan porsinya.</p>
+  <p class="sub">Untuk masakan yang belum ada, <a href="/photo">foto makanannya</a>.</p>
+</section>
 <div class="form-narrow">
   {% if dishes %}
   <form method="post" action="/log">
@@ -21,10 +27,10 @@
       {% for m in meal_types %}<option {% if m == default_meal %}selected{% endif %}>{{ m }}</option>{% endfor %}
     </select>
     <button class="btn primary block" type="submit">Catat</button>
-    <p class="hint">Untuk masakan yang belum ada di daftar, coba <a href="/photo" style="color:var(--chili)">foto makanan</a>.</p>
   </form>
   {% else %}
   <p class="empty">Belum ada makanan di database. Jalankan <code>python import_data.py</code> dulu.</p>
   {% endif %}
+</div>
 </div>
 {% endblock %}

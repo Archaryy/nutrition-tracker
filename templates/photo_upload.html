@@ -3,29 +3,42 @@
 {% block title %}Foto · Food Tracker{% endblock %}
 {% block heading %}Foto makanan{% endblock %}
 {% block content %}
-<div class="form-narrow">
-  <form id="photoForm" method="post" action="/photo" enctype="multipart/form-data">
+<form id="photoForm" class="cols" method="post" action="/photo" enctype="multipart/form-data">
+  <section class="panel fit">
+    <h2 style="margin-top:0">Foto makanan</h2>
+    <p class="lead">Foto piringmu dari atas.</p>
+    <p class="sub">Seluruh piring terlihat, cahaya cukup. Satu foto untuk satu waktu makan.</p>
+    <h2>Ukuran piringmu</h2>
+    <div class="seg" role="radiogroup" aria-label="Ukuran piring">
+      <label><input type="radio" name="plate" value="20"><span>20 cm</span></label>
+      <label><input type="radio" name="plate" value="24" checked><span>24 cm</span></label>
+      <label><input type="radio" name="plate" value="28"><span>28 cm</span></label>
+    </div>
+    <p class="hint">Ukur garis tengah piring sekali saja (kecil 20, sedang 24, besar 28). Dipakai untuk memperkirakan berat dari seberapa penuh piringnya.</p>
+    <p class="hint">Dianalisis di komputer ini oleh model lokal ({{ model }}), tidak dikirim ke internet. Hasilnya perkiraan; kamu memeriksa dan mengoreksinya sebelum disimpan.</p>
+  </section>
+
+  <div class="form-narrow">
     <div class="drop" id="drop">
       <span id="dropIdle" style="display:contents">
         {{ icon("photo") }}
-        <strong>Foto piringmu dari atas</strong>
-        <span>Seluruh piring terlihat, cahaya cukup. Satu foto, satu waktu makan.</span>
+        <strong>Belum ada foto</strong>
+        <span>Ambil foto atau pilih dari galeri.</span>
       </span>
       <img id="preview" alt="" hidden>
     </div>
 
     <div class="pick">
-      <label class="btn primary" for="cam" style="margin:0">{{ icon("photo") }} Kamera</label>
-      <label class="btn" for="gal" style="margin:0">{{ icon("gallery") }} Galeri</label>
+      <label class="btn primary" for="cam">{{ icon("photo") }} Kamera</label>
+      <label class="btn" for="gal">{{ icon("gallery") }} Galeri</label>
       <input id="cam" type="file" accept="image/*" capture="environment">
       <input id="gal" type="file" accept="image/*">
     </div>
     <input id="photo" name="photo" type="file" accept="image/*" hidden required>
 
     <button id="go" class="btn primary block" type="submit" disabled>Analisis foto</button>
-    <p class="hint">Dianalisis di komputer ini oleh model lokal ({{ model }}), tidak dikirim ke internet. Hasilnya perkiraan; kamu memeriksa dan mengoreksinya sebelum disimpan.</p>
-  </form>
-</div>
+  </div>
+</form>
 
 <script>
   // Phone photos are often 5-12 MB. Shrink big ones in the browser before uploading: faster over
@@ -51,6 +64,14 @@
     preview.src = URL.createObjectURL(file);
     preview.hidden = false; idle.style.display = "none"; go.disabled = false;
   }
+  try {                                           // remember the plate size on this device
+    const saved = localStorage.getItem("plate");
+    const r = saved && document.querySelector('input[name="plate"][value="' + saved + '"]');
+    if (r) r.checked = true;
+    form.addEventListener("change", function (e) {
+      if (e.target.name === "plate") localStorage.setItem("plate", e.target.value);
+    });
+  } catch (err) { /* storage can be blocked; the default is fine */ }
   document.getElementById("cam").addEventListener("change", function () { chosen(this); });
   document.getElementById("gal").addEventListener("change", function () { chosen(this); });
   form.addEventListener("submit", async function (e) {

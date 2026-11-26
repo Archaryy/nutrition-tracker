@@ -3,14 +3,28 @@
 {% block title %}7 hari · Food Tracker{% endblock %}
 {% block heading %}7 hari{% endblock %}
 {% block content %}
-  <div class="cols">
-  <div>
+  <div class="cols three">
+  <section class="panel">
     <div class="daynav">
       <a href="/week?end={{ prev_end.isoformat() }}" aria-label="Minggu sebelumnya">{{ icon("left") }}</a>
       <div class="when"><b>{{ days[0].date|tgl("short") }} &ndash; {{ days[-1].date|tgl("short") }}</b><span>kalori per hari</span></div>
       <a href="/week?end={{ next_end.isoformat() }}" aria-label="Minggu berikutnya">{{ icon("right") }}</a>
     </div>
+    <h2 style="margin-top:1.1rem">Rata-rata per hari</h2>
+    {% if logged_days %}
+    <div class="stats">
+      <div><small>Kalori</small><b>{{ "%.0f"|format(avg.kcal) }} <span>kcal</span></b></div>
+      <div><small>Protein</small><b>{{ "%.0f"|format(avg.protein) }} <span>g</span></b></div>
+      <div><small>Karbo</small><b>{{ "%.0f"|format(avg.carbs) }} <span>g</span></b></div>
+      <div><small>Lemak</small><b>{{ "%.0f"|format(avg.fat) }} <span>g</span></b></div>
+    </div>
+    <p class="hint">{{ logged_days }} hari tercatat. Hari tanpa catatan tidak dihitung, supaya rata-rata tidak turun palsu.</p>
+    {% else %}
+    <p class="sub">Belum ada catatan di minggu ini.</p>
+    {% endif %}
+  </section>
 
+  <div>
     <div class="chart">
       {% if targets %}<div class="goal-line" style="bottom:{{ 100 * targets.kcal / scale }}%"><span>target {{ "%.0f"|format(targets.kcal) }}</span></div>{% endif %}
       {% for d in days %}
@@ -21,19 +35,6 @@
       {% endfor %}
     </div>
     <div class="days">{% for d in days %}<a href="/?day={{ d.date.isoformat() }}"><b>{{ d.date.day }}</b>{{ d.date|hari(true) }}</a>{% endfor %}</div>
-
-    <h2>Rata-rata per hari</h2>
-    {% if logged_days %}
-    <div class="stats">
-      <div><small>Kalori</small><b>{{ "%.0f"|format(avg.kcal) }} <span>kcal</span></b></div>
-      <div><small>Protein</small><b>{{ "%.0f"|format(avg.protein) }} <span>g</span></b></div>
-      <div><small>Karbo</small><b>{{ "%.0f"|format(avg.carbs) }} <span>g</span></b></div>
-      <div><small>Lemak</small><b>{{ "%.0f"|format(avg.fat) }} <span>g</span></b></div>
-    </div>
-    <p class="hint">{{ logged_days }} hari tercatat. Hari tanpa catatan tidak dihitung, supaya rata-rata tidak turun palsu.</p>
-    {% else %}
-    <p class="empty">Belum ada catatan di minggu ini.</p>
-    {% endif %}
   </div>
 
   <aside>

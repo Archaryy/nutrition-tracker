@@ -3,15 +3,15 @@
 {% block title %}Hari ini · Food Tracker{% endblock %}
 {% block heading %}{% if is_today %}Hari ini{% else %}{{ day|hari }}{% endif %}{% endblock %}
 {% block content %}
-  <div class="cols">
-  <div>
+  <div class="cols three">
+  <section class="panel">
     <div class="daynav">
       <a href="/?day={{ prev_day.isoformat() }}" aria-label="Hari sebelumnya">{{ icon("left") }}</a>
       <div class="when"><b>{{ day|tgl }}</b><span>{% if is_today %}{{ day|hari }}{% else %}<a class="back" href="/">kembali ke hari ini</a>{% endif %}</span></div>
       <a href="/?day={{ next_day.isoformat() }}" aria-label="Hari berikutnya">{{ icon("right") }}</a>
     </div>
 
-    <section class="hero">
+    <div class="hero">
       <div><span class="big">{{ "%.0f"|format(totals.kcal) }}</span><span class="of">kcal{% if targets %} dari {{ "%.0f"|format(targets.kcal) }}{% endif %}</span></div>
       {% if targets %}
         <p class="hero-sub">{% if totals.kcal > targets.kcal %}<b>Lebih {{ "%.0f"|format(totals.kcal - targets.kcal) }} kcal</b> dari target{% else %}Sisa <b>{{ "%.0f"|format(targets.kcal - totals.kcal) }} kcal</b>{% endif %}</p>
@@ -31,10 +31,26 @@
           <div class="cell"><small>Karbo</small><b>{{ "%.0f"|format(totals.carbs) }}<span> g</span></b></div>
           <div class="cell"><small>Lemak</small><b>{{ "%.0f"|format(totals.fat) }}<span> g</span></b></div>
         </div>
-        <p class="hint">Belum ada target. <a href="/settings" style="color:var(--chili)">Atur target harian</a></p>
+        <p class="hint">Belum ada target. <a href="/settings">Atur target harian</a></p>
       {% endif %}
-    </section>
+    </div>
+    {% if entries %}
+    <div class="split">
+      <h2>Per waktu makan</h2>
+      {% for m in meal_types %}
+        {% set k = entries|selectattr("meal_type", "equalto", m)|sum(attribute="kcal") %}
+        <div class="split-row"><span>{{ m }}</span><b>{{ "%.0f"|format(k) }} kcal</b>
+          <div class="meter thin"><i style="width:{{ (100 * k / totals.kcal)|round(0) if totals.kcal else 0 }}%"></i></div></div>
+      {% endfor %}
+    </div>
+    {% endif %}
+  </section>
 
+  <div class="meals">
+    <div class="cta-row">
+      <a class="btn primary" href="/photo">{{ icon("photo") }} Foto makanan</a>
+      <a class="btn" href="/add?day={{ day.isoformat() }}">{{ icon("add") }} Catat manual</a>
+    </div>
     {% if entries %}
       {% for m in meal_types %}
         {% set group = entries|selectattr("meal_type", "equalto", m)|list %}

@@ -19,6 +19,7 @@ from pathlib import Path
 import photo_ai
 from database import DB_FILE
 from food_match import load_foods, suggest, user_foods
+import weights
 
 FOLDER = Path("eval")
 
@@ -36,8 +37,8 @@ def main():
     conn.row_factory = sqlite3.Row
     foods = user_foods(conn) + load_foods()
 
-    def food_of(name, alt=None):
-        found = suggest(name, foods, 1, alt=alt)
+    def food_of(name, alt=None, kind=None):
+        found = suggest(name, foods, 1, alt=alt, kind=kind)
         return found[0][1]["food_id"] if found else None
 
     hits = missed = extra = 0
@@ -50,9 +51,9 @@ def main():
             continue
         got = {}
         for it in seen:
-            fid = food_of(it["name"], it.get("name_en"))
+            fid = food_of(it["name"], it.get("name_en"), it.get("kind"))
             if fid and fid not in got:
-                got[fid] = it["grams"]
+                got[fid] = weights.estimate(it)[0]
         print(f"\n{filename}")
         for name, grams in wanted:
             fid = food_of(name)
@@ -66,7 +67,7 @@ def main():
                 print(f"  MISSED  {name}")
         wanted_ids = {food_of(n) for n, _ in wanted}
         for it in seen:
-            if food_of(it["name"], it.get("name_en")) not in wanted_ids:
+            if food_of(it["name"], it.get("name_en"), it.get("kind")) not in wanted_ids:
                 extra += 1
                 print(f"  extra   {it['name']} ({it['grams']:.0f} g)")
     total = hits + missed

@@ -3,6 +3,18 @@
 {% block heading %}Target{% endblock %}
 {% block content %}
   {% if saved %}<p class="note">Tersimpan.</p>{% endif %}
+  <div class="cols">
+    <section class="panel fit">
+      <h2 style="margin-top:0">Target harian</h2>
+      {% if form.kcal != "" %}
+      <div><span class="big">{{ "%g"|format(form.kcal) }}</span><span class="of">kcal</span></div>
+      <div class="trio">
+        <div><small>Protein</small><b>{{ "%g"|format(form.protein) }}<span> g</span></b></div>
+        <div><small>Karbo</small><b>{{ "%g"|format(form.carbs) }}<span> g</span></b></div>
+        <div><small>Lemak</small><b>{{ "%g"|format(form.fat) }}<span> g</span></b></div>
+    </div>
+    {% else %}<p class="sub">Belum ada target. Isi di samping, atau hitung saran dulu.</p>{% endif %}
+  </section>
   <div class="settings-grid">
   <div>
     <section class="group">
@@ -82,4 +94,5 @@
     </section>
   </div>
   </div>
+</div>
 {% endblock %}

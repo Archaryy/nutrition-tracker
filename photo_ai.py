@@ -1,4 +1,8 @@
 """Ask a local vision model (Ollama) what is on a meal photo.
+
+Setup (once):  install Ollama from ollama.com, then   ollama pull qwen3-vl:8b-instruct
+Change the model with the OLLAMA_MODEL environment variable if your computer is small
+(for example OLLAMA_MODEL=qwen3-vl:4b-instruct) or large. Nothing leaves your computer.
 """
 import base64
 import json
@@ -8,37 +12,52 @@ import urllib.error
 import urllib.request
 
 OLLAMA_URL = os.environ.get("OLLAMA_URL", "http://localhost:11434")
-MODEL = os.environ.get("OLLAMA_MODEL", "qwen2.5vl:7b")
+MODEL = os.environ.get("OLLAMA_MODEL", "qwen3-vl:8b-instruct")
 TIMEOUT = int(os.environ.get("OLLAMA_TIMEOUT", "300"))
 
-PROMPT = """You are a nutrition assistant for an Indonesian user. Look at this photo of a meal.
-List every separate food you can see.
+KINDS = ("rice", "noodle", "bread", "chicken", "beef", "pork", "fish", "seafood", "egg",
+         "tofu_tempeh", "vegetable", "fruit", "soup", "snack", "drink", "sauce", "other")
+UNITS = ("piece", "slice", "egg", "bowl", "cup", "spoon", "none")
+
+PROMPT = """You are a nutrition assistant for an Indonesian user. Look carefully at this photo of a meal and list every separate food on it.
+
+For each food, write these fields in this order (describe first, then name):
+- "look": 5 to 12 words on what you literally see: shape, colour, texture. Examples: "long thin yellow strands with sauce", "many small white separate grains", "golden crispy battered pieces".
+- "kind": exactly one of: rice, noodle, bread, chicken, beef, pork, fish, seafood, egg, tofu_tempeh, vegetable, fruit, soup, snack, drink, sauce, other.
+- "name": short Indonesian name that includes how it was cooked, for example "mie goreng", "dada ayam panggang", "tempe goreng", "nasi putih", "sayur bayam". Never just "daging": say which animal.
+- "name_en": the same food in plain English.
+- "count" and "unit": how many you can count, and of what. unit is one of: piece, slice, egg, bowl, cup, spoon, none. Use piece, slice or egg when you can count them, bowl or cup for soups and drinks, none for food heaped on a plate.
+- "plate_share": for food on a plate, the fraction from 0 to 1 of the plate's surface it covers. Use 0 if it is not on a plate or you counted it.
+- "grams": your best guess of its weight as eaten.
 
 Rules:
-- One entry per distinct food: the rice, each side dish, each vegetable, a sauce if it is clearly a separate portion. A single mixed dish (nasi goreng, soto, gado-gado) is ONE entry.
-- "name": a short Indonesian name that says how it was cooked, for example "ayam goreng" (not just "ayam"), "tempe goreng", "tahu bacem", "sayur bayam", "nasi putih", "telur dadar".
-- "name_en": the same food in plain English, for example "fried chicken".
-- "grams": your best estimate of the weight of that food on the plate, as eaten. Use size clues: a standard dinner plate is about 25 cm across; a level rice scoop is about 100 g and a heaped serving about 150-200 g; a palm-sized piece of cooked meat or fish is about 90 g; one egg is about 50 g.
-- Only list what you can see. Do not invent hidden ingredients and do not repeat a food.
-{hints}
-Reply with JSON only, exactly in this shape:
-{{"items": [{{"name": "nasi putih", "name_en": "steamed white rice", "grams": 150}}]}}"""
+- Noodles are long thin strands (mie, bihun, kwetiau, spaghetti). Rice is many small separate grains. Never call noodles rice.
+- Kerupuk and keremes are pale, puffy, brittle fried snacks. They are not noodles.
+- Sliced cooked chicken breast is "dada ayam".
+- A single mixed dish (nasi goreng, mie ayam, soto, gado-gado) is ONE entry.
+- Only list what you can see. Do not repeat a food.
+
+Reply with JSON only, in exactly this shape:
+{"items": [{"look": "long thin yellow strands with sauce", "kind": "noodle", "name": "mie goreng", "name_en": "fried noodles", "count": 1, "unit": "none", "plate_share": 0.5, "grams": 220}]}"""
 
 
-def build_prompt(usual=()):
-    """The prompt, with the foods this person often eats as naming hints."""
-    hints = ""
-    if usual:
-        hints = ("Foods this person often eats (use these exact names when the photo shows the "
-                 "same food): " + ", ".join(usual[:20]) + "\n")
-    return PROMPT.format(hints=hints)
+def build_prompt():
+    return PROMPT
 
 
 class PhotoAIError(Exception):
     """The model could not be reached or gave an unusable answer."""
 
 
+def _num(value):
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
 def parse_items(text):
+    """Turn the model's reply into a list with one dict per food, tolerating junk around it."""
     if not text:
         raise PhotoAIError("The model returned an empty answer.")
     match = re.search(r"\{.*\}", text, re.S)
@@ -56,17 +75,26 @@ def parse_items(text):
         if not isinstance(entry, dict):
             continue
         name = str(entry.get("name") or "").strip()
+        if not name:
+            continue
         try:
             grams = float(str(entry.get("grams")).lower().replace("g", "").replace(",", ".").strip())
         except ValueError:
             grams = 100.0
-        if not name:
-            continue
-        name_en = str(entry.get("name_en") or "").strip()[:80]
-        items.append({"name": name[:80], "name_en": name_en,
-                      "grams": min(max(grams, 1.0), 2000.0)})
+        kind = str(entry.get("kind") or "").strip().lower().replace(" ", "_")
+        unit = str(entry.get("unit") or "").strip().lower()
+        items.append({
+            "name": name[:80],
+            "name_en": str(entry.get("name_en") or "").strip()[:80],
+            "look": str(entry.get("look") or "").strip()[:120],
+            "kind": kind if kind in KINDS else "other",
+            "unit": unit if unit in UNITS else "none",
+            "count": _num(entry.get("count")),
+            "plate_share": _num(entry.get("plate_share")),
+            "grams": min(max(grams, 1.0), 2000.0),
+        })
     seen, unique = set(), []
-    for it in items:
+    for it in items:                       # models sometimes list the same food twice
         k = it["name"].lower()
         if k not in seen:
             seen.add(k)
@@ -74,14 +102,15 @@ def parse_items(text):
     return unique[:15]
 
 
-def analyze(image_bytes, usual=()):
-    """Send the photo to Ollama and return the detected items. `usual` = foods you often eat."""
+def analyze(image_bytes):
+    """Send the photo to Ollama and return the detected items."""
     payload = {
         "model": MODEL,
         "stream": False,
         "format": "json",
+        "think": False,                 # answer directly (some models "think" first and are slow)
         "options": {"temperature": 0},
-        "messages": [{"role": "user", "content": build_prompt(usual),
+        "messages": [{"role": "user", "content": build_prompt(),
                       "images": [base64.b64encode(image_bytes).decode("ascii")]}],
     }
     request = urllib.request.Request(

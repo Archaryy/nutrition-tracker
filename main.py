@@ -4,6 +4,8 @@ from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from database import get_connection, init_db
 from food_match import load_foods, suggest, user_foods, CONFIDENT
+from food_match import search as search_foods
+import weights
 import base64
 import csv
 import os
@@ -410,48 +412,59 @@ def photo_upload(request: Request):
     """Show the photo upload form."""
     return templates.TemplateResponse(request, "photo_upload.html", {
         "page": "photo",
-        "model": os.environ.get("OLLAMA_MODEL", "qwen2.5vl:7b"),
-    })
+        "model": photo_ai.MODEL, 
+        })
+
+
+@app.get("/foods/search")
+def food_search(q: str = ""):
+    """Type-to-search for the food picker on the review page."""
+    with get_connection() as conn:
+        foods, labels, _, _ = _catalog(conn)
+    label_of = {f["food_id"]: l for f, l in zip(foods, labels)}
+    return [{"label": label_of[f["food_id"]], "kcal": round(float(f["kcal"] or 0)),
+             "mine": f["food_id"].startswith("ing_")}
+            for f in search_foods(q, foods, limit=8)]
 
 
 @app.post("/photo")
-async def photo_analyze(request: Request, photo: UploadFile = File(...)):
+async def photo_analyze(request: Request, photo: UploadFile = File(...), plate: int = Form(24)):
     """Receive the uploaded image, run the vision model, show the review form."""
     image_bytes = await photo.read()
     photo_src = ("data:" + (photo.content_type or "image/jpeg") + ";base64,"
                  + base64.b64encode(image_bytes).decode("ascii"))
+    plate = plate if 15 <= plate <= 40 else weights.REFERENCE_PLATE_CM
 
     with get_connection() as conn:
         foods, labels, lookup, by_id = _catalog(conn)
         label_of = {f["food_id"]: l for f, l in zip(foods, labels)}
-        usual = photo_memory.usual_foods(conn)
         error, detected = None, []
         try:
-            detected = photo_ai.analyze(image_bytes, usual)
+            detected = photo_ai.analyze(image_bytes)
         except photo_ai.PhotoAIError as exc:
             error = str(exc)
 
         kcal_map = {l.lower(): float(f["kcal"] or 0) for f, l in zip(foods, labels)}
         rows = []
         for item in detected:
-            seen, grams, why = item["name"], int(item["grams"]), ""
-            pick, guess = "", ""
+            seen = item["name"]
+            grams, how = weights.estimate(item, plate)
+            pick, why = "", ""
+            matches = suggest(seen, foods, limit=5, alt=item.get("name_en"), kind=item.get("kind"))
             known = photo_memory.recall(conn, seen)
             if known and known["food_id"] in by_id:           # you taught us this one
                 pick = label_of[by_id[known["food_id"]]["food_id"]]
                 grams = int(known["grams"])
+                how = ""
                 why = f"sesuai pilihanmu sebelumnya ({known['n']}x)"
-            else:
-                matches = suggest(seen, foods, alt=item.get("name_en"))
-                if matches:
-                    score, best = matches[0]
-                    if score >= CONFIDENT:
-                        pick = label_of[best["food_id"]]
-                    else:
-                        guess = label_of[best["food_id"]]
-            rows.append({"seen": seen, "grams": grams, "pick": pick, "guess": guess, "why": why})
-        for _ in range(2 if rows else 4):        # blank rows, for foods the model missed
-            rows.append({"seen": "", "grams": "", "pick": "", "guess": "", "why": ""})
+            elif matches and matches[0][0] >= CONFIDENT:
+                pick = label_of[matches[0][1]["food_id"]]
+            alts = [label_of[f["food_id"]] for _, f in matches if label_of[f["food_id"]] != pick][:4]
+            rows.append({"seen": seen, "look": item.get("look", ""), "grams": grams, "how": how,
+                         "pick": pick, "alts": alts, "why": why})
+        for _ in range(1 if rows else 3):        # blank rows, for foods the model missed
+            rows.append({"seen": "", "look": "", "grams": "", "how": "", "pick": "",
+                         "alts": [], "why": ""})
 
     now = datetime.now()
     return templates.TemplateResponse(request, "photo_review.html", {
@@ -459,14 +472,12 @@ async def photo_analyze(request: Request, photo: UploadFile = File(...)):
         "photo_src": photo_src,
         "error": error,
         "rows": rows,
-        "options": labels,
         "kcal_map": kcal_map,
         "day": date.today().isoformat(),
         "now_time": now.strftime("%H:%M"),
         "default_meal": default_meal_type(now),
         "meal_types": MEAL_TYPES,
     })
-
 
 @app.post("/photo/save")
 async def photo_save(request: Request):

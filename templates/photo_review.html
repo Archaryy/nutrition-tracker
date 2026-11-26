@@ -3,37 +3,10 @@
 {% block title %}Periksa · Food Tracker{% endblock %}
 {% block heading %}Periksa hasil{% endblock %}
 {% block content %}
-{% if error %}<p class="note">{{ error }} Kamu tetap bisa mengisi makanannya sendiri di bawah.</p>{% endif %}
-<form method="post" action="/photo/save" class="review" id="reviewForm">
-  <div class="shot">
+<form method="post" action="/photo/save" class="cols" id="reviewForm">
+  <section class="panel">
     <img src="{{ photo_src }}" alt="Foto makanan" class="meal-photo">
-    <p class="hint">Cek tiap baris: pilih makanan yang tepat dan atur beratnya. Kosongkan makanan di baris yang salah. Pilihanmu diingat untuk foto berikutnya.</p>
-  </div>
-
-  <div>
-    <datalist id="foods">{% for o in options %}<option value="{{ o }}">{% endfor %}</datalist>
-    {% for r in rows %}
-    <div class="rrow">
-      <div class="rrow-head">
-        <span>{% if r.seen %}Terdeteksi: <b>{{ r.seen }}</b>{% else %}Tambah makanan{% endif %}</span>
-        {% if r.why %}<span class="chip chip-learn">dari kebiasaanmu</span>
-        {% elif r.pick %}<span class="chip chip-ok">cocok</span>
-        {% elif r.seen %}<span class="chip chip-ask">periksa</span>{% endif %}
-      </div>
-      <input type="hidden" name="seen_{{ loop.index0 }}" value="{{ r.seen }}">
-      <input class="f-food" name="food_{{ loop.index0 }}" list="foods" value="{{ r.pick }}" autocomplete="off"
-             placeholder="{{ 'Mungkin: ' ~ r.guess if r.guess else 'Cari makanan' }}">
-      <div class="grams">
-        <button type="button" class="step" data-d="-10" aria-label="Kurangi 10 gram">&minus;</button>
-        <input name="grams_{{ loop.index0 }}" type="number" inputmode="numeric" min="1" max="2000" step="1" value="{{ r.grams }}" placeholder="0">
-        <span class="unit">g</span>
-        <button type="button" class="step" data-d="10" aria-label="Tambah 10 gram">+</button>
-        <output>–</output>
-      </div>
-      {% if r.why %}<p class="why">Diisi {{ r.why }}.</p>{% elif r.seen and not r.pick %}<p class="why">Belum ada kecocokan yang yakin{% if r.guess %}; tebakan: {{ r.guess }}{% endif %}. Pilih sendiri.</p>{% endif %}
-    </div>
-    {% endfor %}
-
+    <p class="hint">Cek tiap baris. Ketuk salah satu pilihan di bawah nama makanan, atau ketik untuk mencari. Atur beratnya; timbangan dapur paling akurat. Kosongkan makanan di baris yang salah. Pilihanmu diingat untuk foto berikutnya.</p>
     <h2>Kapan</h2>
     <div class="row">
       <div><label for="day">Tanggal</label><input id="day" name="day" type="date" value="{{ day }}" required></div>
@@ -43,6 +16,45 @@
     <select id="meal_type" name="meal_type">
       {% for m in meal_types %}<option {% if m == default_meal %}selected{% endif %}>{{ m }}</option>{% endfor %}
     </select>
+
+  </section>
+
+  <div>
+    {% if error %}<p class="note">{{ error }} Kamu tetap bisa mengisi makanannya sendiri di bawah.</p>{% endif %}
+    <div class="review-rows">
+    {% for r in rows %}
+    <div class="rrow">
+      <div class="rrow-head">
+        <span>{% if r.seen %}Terdeteksi: <b>{{ r.seen }}</b>{% else %}Tambah makanan{% endif %}</span>
+        {% if r.why %}<span class="chip chip-learn">dari kebiasaanmu</span>
+        {% elif r.pick %}<span class="chip chip-ok">cocok</span>
+        {% elif r.seen %}<span class="chip chip-ask">periksa</span>{% endif %}
+      </div>
+      {% if r.look %}<p class="look">Terlihat: {{ r.look }}</p>{% endif %}
+      <input type="hidden" name="seen_{{ loop.index0 }}" value="{{ r.seen }}">
+      <div class="combo">
+        <input class="f-food" name="food_{{ loop.index0 }}" value="{{ r.pick }}" autocomplete="off"
+               placeholder="Ketik untuk mencari makanan" role="combobox" aria-expanded="false" aria-autocomplete="list">
+        <ul class="sugg" role="listbox" hidden></ul>
+      </div>
+      {% if r.alts %}
+      <div class="alts"><span class="sr">{{ 'Pilihan lain' if r.pick else 'Mungkin' }}</span>
+        {% for a in r.alts %}<button type="button" data-label="{{ a }}">{{ a }}</button>{% endfor %}
+      </div>
+      {% endif %}
+      <div class="grams">
+        <button type="button" class="step" data-d="-10" aria-label="Kurangi 10 gram">&minus;</button>
+        <input name="grams_{{ loop.index0 }}" type="number" inputmode="numeric" min="1" max="2000" step="1" value="{{ r.grams }}" placeholder="0">
+        <span class="unit">g</span>
+        <button type="button" class="step" data-d="10" aria-label="Tambah 10 gram">+</button>
+        <output>–</output>
+      </div>
+      {% if r.why %}<p class="why">Diisi {{ r.why }}.</p>
+      {% elif r.how %}<p class="why">Berat: {{ r.how }}. Perkiraan, bukan timbangan.</p>
+      {% elif r.seen and not r.pick %}<p class="why">Belum ada kecocokan yang yakin. Pilih sendiri.</p>{% endif %}
+    </div>
+    {% endfor %}
+    </div>
 
     <div class="savebar">
       <div class="total"><small>Perkiraan total</small><b id="total">0 kcal</b></div>
@@ -68,7 +80,58 @@
     });
     document.getElementById("total").textContent = Math.round(total) + " kcal";
   }
+
   rows.forEach(function (row) {
+    const input = row.querySelector(".f-food"), list = row.querySelector(".sugg");
+    let items = [], cur = -1, timer = null, ticket = 0;
+
+    function close() { list.hidden = true; cur = -1; input.setAttribute("aria-expanded", "false"); }
+    function choose(label) { input.value = label; close(); recalc(); }
+    function mark() {
+      Array.prototype.forEach.call(list.children, function (li, i) { li.classList.toggle("cur", i === cur); });
+    }
+    function show() {
+      list.textContent = "";
+      if (!items.length) {
+        const li = document.createElement("li"); li.className = "none"; li.textContent = "Tidak ketemu. Coba kata lain.";
+        list.appendChild(li);
+      }
+      items.forEach(function (it) {
+        const li = document.createElement("li");
+        li.setAttribute("role", "option");
+        const name = document.createElement("div"); name.textContent = it.label;
+        const kc = document.createElement("span"); kc.textContent = it.kcal + " kcal/100 g";
+        li.appendChild(name); li.appendChild(kc);
+        li.addEventListener("pointerdown", function (e) { e.preventDefault(); choose(it.label); });
+        list.appendChild(li);
+      });
+      list.hidden = false; input.setAttribute("aria-expanded", "true");
+    }
+    input.addEventListener("focus", function () { input.select(); });
+    input.addEventListener("input", function () {
+      clearTimeout(timer);
+      const q = input.value.trim();
+      if (q.length < 2) { close(); return; }
+      timer = setTimeout(function () {
+        const mine = ++ticket;                                   // ignore answers that arrive late
+        fetch("/foods/search?q=" + encodeURIComponent(q))
+          .then(function (r) { return r.json(); })
+          .then(function (data) { if (mine === ticket) { items = data; cur = -1; show(); } })
+          .catch(function () { /* offline: the typed text can still be saved if it is exact */ });
+      }, 150);
+    });
+    input.addEventListener("keydown", function (e) {
+      if (list.hidden) return;
+      if (e.key === "ArrowDown") { cur = Math.min(items.length - 1, cur + 1); mark(); e.preventDefault(); }
+      else if (e.key === "ArrowUp") { cur = Math.max(0, cur - 1); mark(); e.preventDefault(); }
+      else if (e.key === "Enter") { if (items.length) choose(items[Math.max(cur, 0)].label); e.preventDefault(); }
+      else if (e.key === "Escape") { close(); }
+    });
+    input.addEventListener("blur", function () { setTimeout(close, 150); });
+
+    row.querySelectorAll(".alts button").forEach(function (b) {
+      b.addEventListener("click", function () { choose(b.dataset.label); });
+    });
     row.addEventListener("input", recalc);
     row.addEventListener("change", recalc);
     row.querySelectorAll(".step").forEach(function (b) {

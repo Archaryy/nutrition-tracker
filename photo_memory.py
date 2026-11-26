@@ -34,10 +34,3 @@ def recall(conn, seen):
     mine = [r for r in rows if r["food_id"] == best]
     return {"food_id": best, "food_name": mine[0]["food_name"],
             "grams": round(median(r["grams"] for r in mine)), "n": len(mine)}
-
-
-def usual_foods(conn, limit=20):
-    """Names of the foods you pick most often. They are shown to the model as hints."""
-    rows = conn.execute("SELECT food_name, COUNT(*) AS n FROM photo_feedback "
-                        "GROUP BY food_id ORDER BY n DESC, MAX(id) DESC LIMIT ?", (limit,))
-    return [r["food_name"] for r in rows]
