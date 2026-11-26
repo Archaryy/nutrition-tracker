@@ -1,37 +1,84 @@
 {% extends "base.html" %}
+{% from "_icons.html" import icon %}
+{% block title %}Periksa · Food Tracker{% endblock %}
+{% block heading %}Periksa hasil{% endblock %}
 {% block content %}
-  {% if error %}<p class="note">{{ error }} Kamu tetap bisa mengisi makanannya sendiri di bawah.</p>{% endif %}
-  <section class="card">
+{% if error %}<p class="note">{{ error }} Kamu tetap bisa mengisi makanannya sendiri di bawah.</p>{% endif %}
+<form method="post" action="/photo/save" class="review" id="reviewForm">
+  <div class="shot">
     <img src="{{ photo_src }}" alt="Foto makanan" class="meal-photo">
-    <p class="sub">Periksa tiap baris. Ketik untuk mencari makanan, lalu atur beratnya (gram). Kosongkan baris yang salah.</p>
-  </section>
+    <p class="hint">Cek tiap baris: pilih makanan yang tepat dan atur beratnya. Kosongkan makanan di baris yang salah. Pilihanmu diingat untuk foto berikutnya.</p>
+  </div>
 
-  <form method="post" action="/photo/save">
-    <input type="hidden" name="photo" value="{{ photo }}">
+  <div>
     <datalist id="foods">{% for o in options %}<option value="{{ o }}">{% endfor %}</datalist>
-    <section class="card">
-      {% for r in rows %}
-      <div class="photo-row">
-        <input type="hidden" name="seen_{{ loop.index0 }}" value="{{ r.seen }}">
-        {% if r.seen %}<div class="sub">Terdeteksi: <b>{{ r.seen }}</b></div>{% else %}<div class="sub">Tambah makanan</div>{% endif %}
-        <div class="row">
-          <div style="flex:3"><input name="food_{{ loop.index0 }}" list="foods" value="{{ r.pick }}" placeholder="{{ 'Mungkin: ' ~ r.guess if r.guess else 'Cari makanan' }}" autocomplete="off"></div>
-          <div style="flex:1"><input name="grams_{{ loop.index0 }}" type="number" min="1" max="2000" step="1" value="{{ r.grams }}" placeholder="gram"></div>
-        </div>
-        {% if r.seen and not r.pick %}<div class="sub est">Belum ada kecocokan yang yakin. Pilih sendiri{% if r.guess %} (tebakan: {{ r.guess }}){% endif %}.</div>{% endif %}
+    {% for r in rows %}
+    <div class="rrow">
+      <div class="rrow-head">
+        <span>{% if r.seen %}Terdeteksi: <b>{{ r.seen }}</b>{% else %}Tambah makanan{% endif %}</span>
+        {% if r.why %}<span class="chip chip-learn">dari kebiasaanmu</span>
+        {% elif r.pick %}<span class="chip chip-ok">cocok</span>
+        {% elif r.seen %}<span class="chip chip-ask">periksa</span>{% endif %}
       </div>
-      {% endfor %}
-    </section>
-    <section class="card">
-      <div class="row">
-        <div><label for="day">Tanggal</label><input id="day" name="day" type="date" value="{{ day }}" required></div>
-        <div><label for="time">Jam</label><input id="time" name="time" type="time" value="{{ now_time }}" required></div>
+      <input type="hidden" name="seen_{{ loop.index0 }}" value="{{ r.seen }}">
+      <input class="f-food" name="food_{{ loop.index0 }}" list="foods" value="{{ r.pick }}" autocomplete="off"
+             placeholder="{{ 'Mungkin: ' ~ r.guess if r.guess else 'Cari makanan' }}">
+      <div class="grams">
+        <button type="button" class="step" data-d="-10" aria-label="Kurangi 10 gram">&minus;</button>
+        <input name="grams_{{ loop.index0 }}" type="number" inputmode="numeric" min="1" max="2000" step="1" value="{{ r.grams }}" placeholder="0">
+        <span class="unit">g</span>
+        <button type="button" class="step" data-d="10" aria-label="Tambah 10 gram">+</button>
+        <output>–</output>
       </div>
-      <label for="meal_type">Waktu makan</label>
-      <select id="meal_type" name="meal_type">
-        {% for m in meal_types %}<option {% if m == default_meal %}selected{% endif %}>{{ m }}</option>{% endfor %}
-      </select>
-      <button class="primary" type="submit">Simpan ke catatan</button>
-    </section>
-  </form>
+      {% if r.why %}<p class="why">Diisi {{ r.why }}.</p>{% elif r.seen and not r.pick %}<p class="why">Belum ada kecocokan yang yakin{% if r.guess %}; tebakan: {{ r.guess }}{% endif %}. Pilih sendiri.</p>{% endif %}
+    </div>
+    {% endfor %}
+
+    <h2>Kapan</h2>
+    <div class="row">
+      <div><label for="day">Tanggal</label><input id="day" name="day" type="date" value="{{ day }}" required></div>
+      <div><label for="time">Jam</label><input id="time" name="time" type="time" value="{{ now_time }}" required></div>
+    </div>
+    <label for="meal_type">Waktu makan</label>
+    <select id="meal_type" name="meal_type">
+      {% for m in meal_types %}<option {% if m == default_meal %}selected{% endif %}>{{ m }}</option>{% endfor %}
+    </select>
+
+    <div class="savebar">
+      <div class="total"><small>Perkiraan total</small><b id="total">0 kcal</b></div>
+      <button class="btn primary" type="submit">Simpan</button>
+    </div>
+  </div>
+</form>
+
+<script>
+  const KCAL = {{ kcal_map|tojson }};              // calories per 100 g for every food in the list
+  const rows = document.querySelectorAll(".rrow");
+  function recalc() {
+    let total = 0;
+    rows.forEach(function (row) {
+      const food = row.querySelector(".f-food").value.trim().toLowerCase();
+      const grams = parseFloat(row.querySelector('input[name^="grams_"]').value) || 0;
+      const per100 = KCAL[food];
+      const out = row.querySelector("output");
+      if (per100 !== undefined && grams > 0) {
+        const k = per100 * grams / 100; total += k;
+        out.innerHTML = Math.round(k) + " <small>kcal</small>";
+      } else { out.textContent = "–"; }
+    });
+    document.getElementById("total").textContent = Math.round(total) + " kcal";
+  }
+  rows.forEach(function (row) {
+    row.addEventListener("input", recalc);
+    row.addEventListener("change", recalc);
+    row.querySelectorAll(".step").forEach(function (b) {
+      b.addEventListener("click", function () {
+        const g = row.querySelector('input[name^="grams_"]');
+        g.value = Math.max(1, Math.min(2000, (parseFloat(g.value) || 0) + parseFloat(b.dataset.d)));
+        recalc();
+      });
+    });
+  });
+  recalc();
+</script>
 {% endblock %}

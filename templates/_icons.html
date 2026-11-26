@@ -1,0 +1,15 @@
+{# Small line icons, drawn here so the app needs no icon font and no internet. #}
+{% macro icon(name) -%}
+<svg class="ic" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+{%- if name == "today" -%}<circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4"/>
+{%- elif name == "week" -%}<path d="M5 20v-8M12 20V4M19 20v-5"/>
+{%- elif name == "photo" -%}<path d="M4 8h3l1.5-2.2h7L17 8h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13" r="3.6"/>
+{%- elif name == "add" -%}<path d="M12 5v14M5 12h14"/>
+{%- elif name == "target" -%}<path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/>
+{%- elif name == "left" -%}<path d="m14.5 6-6 6 6 6"/>
+{%- elif name == "right" -%}<path d="m9.5 6 6 6-6 6"/>
+{%- elif name == "gallery" -%}<rect x="3.5" y="4.5" width="17" height="15" rx="2"/><circle cx="9" cy="10" r="1.6"/><path d="m4 17 5-4.5 4 3.5 3-2.5 4 3.5"/>
+{%- elif name == "close" -%}<path d="M6 6l12 12M18 6 6 18"/>
+{%- endif -%}
+</svg>
+{%- endmacro %}

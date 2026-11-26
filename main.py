@@ -15,6 +15,25 @@ import re
 app = FastAPI()
 templates = Jinja2Templates(directory="templates")
 
+_HARI = ["Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu", "Minggu"]
+_BULAN = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus",
+          "September", "Oktober", "November", "Desember"]
+
+
+def _hari(d, short=False):
+    """Day name in Indonesian: {{ day|hari }} -> Rabu, {{ day|hari(true) }} -> Rab"""
+    return _HARI[d.weekday()][:3] if short else _HARI[d.weekday()]
+
+
+def _tgl(d, style="long"):
+    """{{ day|tgl }} -> 25 November 2026, {{ day|tgl("short") }} -> 25 Nov"""
+    month = _BULAN[d.month - 1]
+    return f"{d.day} {month[:3]}" if style == "short" else f"{d.day} {month} {d.year}"
+
+
+templates.env.filters["hari"] = _hari
+templates.env.filters["tgl"] = _tgl
+
 @app.get("/styles.css")
 def styles():
     return FileResponse("templates/styles.css", media_type="text/css")
@@ -219,7 +238,23 @@ def home(request: Request, day: str =""):
         "default_meal": default_meal_type(now),
         "now_time": now.strftime("%H:%M"),
     })
-    
+@app.get("/add")
+def add_page(request: Request, day: str = ""):
+    """Log a dish you already have by hand."""   
+    now = datetime.now()
+    with get_connection() as conn:
+        dishes = conn.execute(
+            "SELECT id, name, serving_label FROM dishes ORDER BY name"
+        ).fetchall()
+        return templates.TemplateResponse(request, "add.html", {
+            "page": "add",
+            "dishes": dishes,
+            "day": parse_day(day).isoformat(),
+            "meal_types": MEAL_TYPES,
+            "default_meal": default_meal_type(now),
+            "now_time": now.strftime("%H:%M"),
+        })
+ 
 @app.post("/log")
 def log_meal(
     day: str = Form(...),

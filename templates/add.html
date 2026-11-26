@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}Catat · Food Tracker{% endblock %}
+{% block heading %}Catat makanan{% endblock %}
+{% block content %}
+<div class="form-narrow">
+  {% if dishes %}
+  <form method="post" action="/log">
+    <input type="hidden" name="day" value="{{ day }}">
+    <label for="dish_id">Makanan</label>
+    <select id="dish_id" name="dish_id" required>
+      {% for d in dishes %}<option value="{{ d.id }}">{{ d.name }} ({{ d.serving_label }})</option>{% endfor %}
+    </select>
+    <div class="row">
+      <div><label for="servings">Porsi</label>
+        <input id="servings" name="servings" type="number" inputmode="decimal" step="0.25" min="0.25" max="20" value="1" required></div>
+      <div><label for="time">Jam</label>
+        <input id="time" name="time" type="time" value="{{ now_time }}" required></div>
+    </div>
+    <label for="meal_type">Waktu makan</label>
+    <select id="meal_type" name="meal_type">
+      {% for m in meal_types %}<option {% if m == default_meal %}selected{% endif %}>{{ m }}</option>{% endfor %}
+    </select>
+    <button class="btn primary block" type="submit">Catat</button>
+    <p class="hint">Untuk masakan yang belum ada di daftar, coba <a href="/photo" style="color:var(--chili)">foto makanan</a>.</p>
+  </form>
+  {% else %}
+  <p class="empty">Belum ada makanan di database. Jalankan <code>python import_data.py</code> dulu.</p>
+  {% endif %}
+</div>
+{% endblock %}

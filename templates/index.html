@@ -1,113 +1,106 @@
-<!DOCTYPE html>
 {% extends "base.html" %}
+{% from "_icons.html" import icon %}
+{% block title %}Hari ini · Food Tracker{% endblock %}
+{% block heading %}{% if is_today %}Hari ini{% else %}{{ day|hari }}{% endif %}{% endblock %}
 {% block content %}
+  <div class="cols">
+  <div>
     <div class="daynav">
-        <a href="/?day={{prev_day.isoformat()}}">&larr; {{ prev_day.strftime("%d %b")}}</a>
-        <strong>
-            {% if is_today %}Hari ini, {% endif %}{{ day.strftime("%a %d %b %y") }}
-        </strong>
-        <a href="/?day={{ next_day.isoformat() }}">{{ next_day.strftime("%d %b") }} &rarr;</a>
+      <a href="/?day={{ prev_day.isoformat() }}" aria-label="Hari sebelumnya">{{ icon("left") }}</a>
+      <div class="when"><b>{{ day|tgl }}</b><span>{% if is_today %}{{ day|hari }}{% else %}<a class="back" href="/">kembali ke hari ini</a>{% endif %}</span></div>
+      <a href="/?day={{ next_day.isoformat() }}" aria-label="Hari berikutnya">{{ icon("right") }}</a>
     </div>
 
-    <section class="card">
-      <div class="kcal">{{ "%.0f"|format(totals.kcal) }} <small>kcal{% if targets %} / {{ "%.0f"|format(targets.kcal) }}{% endif %}</small></div>
+    <section class="hero">
+      <div><span class="big">{{ "%.0f"|format(totals.kcal) }}</span><span class="of">kcal{% if targets %} dari {{ "%.0f"|format(targets.kcal) }}{% endif %}</span></div>
       {% if targets %}
-      <div class="bar {% if totals.kcal > targets.kcal %}over{% endif %}"><span style="width:{{ [100, 100 * totals.kcal / targets.kcal]|min|round(0) }}%"></span></div>
-      <div class="sub">
-        {% if totals.kcal > targets.kcal %}Lebih {{ "%.0f"|format(totals.kcal - targets.kcal) }} kcal dari target
-        {% else %}Sisa {{ "%.0f"|format(targets.kcal - totals.kcal) }} kcal{% endif %}
-      </div>
-      {% for label, key in [("Protein","protein"),("Karbo","carbs"),("Lemak","fat")] %}
-      <div class="goal">
-        <div class="top"><span>{{ label }}</span><span><b>{{ "%.0f"|format(totals[key]) }}</b> / {{ "%.0f"|format(targets[key]) }} g</span></div>
-        <div class="bar {% if totals[key] > targets[key] * 1.1 %}over{% endif %}"><span style="width:{{ [100, 100 * totals[key] / targets[key]]|min|round(0) }}%"></span></div>
-      </div>
-      {% endfor %}
+        <p class="hero-sub">{% if totals.kcal > targets.kcal %}<b>Lebih {{ "%.0f"|format(totals.kcal - targets.kcal) }} kcal</b> dari target{% else %}Sisa <b>{{ "%.0f"|format(targets.kcal - totals.kcal) }} kcal</b>{% endif %}</p>
+        <div class="meter {% if totals.kcal > targets.kcal %}over{% endif %}"><i style="width:{{ [100, 100 * totals.kcal / targets.kcal]|min|round(0) }}%"></i></div>
+        <div class="trio">
+          {% for label, key in [("Protein","protein"),("Karbo","carbs"),("Lemak","fat")] %}
+          <div class="cell">
+            <small>{{ label }}</small>
+            <b>{{ "%.0f"|format(totals[key]) }}<span> / {{ "%.0f"|format(targets[key]) }} g</span></b>
+            <div class="meter thin {% if totals[key] > targets[key] * 1.1 %}over{% endif %}"><i style="width:{{ [100, 100 * totals[key] / targets[key]]|min|round(0) }}%"></i></div>
+          </div>
+          {% endfor %}
+        </div>
       {% else %}
-      <div class="macros">
-        <span>Protein <b>{{ "%.0f"|format(totals.protein) }} g</b></span>
-        <span>Karbo <b>{{ "%.0f"|format(totals.carbs) }} g</b></span>
-        <span>Lemak <b>{{ "%.0f"|format(totals.fat) }} g</b></span>
-      </div>
-      <p class="sub">Belum ada target. <a class="btn" href="/settings">Atur target harian</a></p>
+        <div class="trio">
+          <div class="cell"><small>Protein</small><b>{{ "%.0f"|format(totals.protein) }}<span> g</span></b></div>
+          <div class="cell"><small>Karbo</small><b>{{ "%.0f"|format(totals.carbs) }}<span> g</span></b></div>
+          <div class="cell"><small>Lemak</small><b>{{ "%.0f"|format(totals.fat) }}<span> g</span></b></div>
+        </div>
+        <p class="hint">Belum ada target. <a href="/settings" style="color:var(--chili)">Atur target harian</a></p>
       {% endif %}
     </section>
 
-    <section class="card">
     {% if entries %}
-    <table>
-      <thead><tr><th>Makanan</th><th class="num">kcal</th><th></th></tr></thead>
-      <tbody>
-      {% for e in entries %}
-        <tr>
-          <td>
-            {{ e.name }}
-            <div class="sub">{{ e.eaten_at[11:16] }} &middot; {{ e.meal_type }} &middot;
-              {{ "%g"|format(e.servings) }} &times; {{ e.serving_label }}</div>
-          </td>
-          <td class="num">{{ "%.0f"|format(e.kcal) }}</td>
-          <td class="num">
-            <form class="inline" method="post" action="/delete/{{ e.id }}"
-                  onsubmit="return confirm('Hapus entri ini?')">
-              <input type="hidden" name="day" value="{{ day.isoformat() }}">
-              <button class="link" type="submit" aria-label="Hapus">Hapus</button>
-            </form>
-          </td>
-        </tr>
+      {% for m in meal_types %}
+        {% set group = entries|selectattr("meal_type", "equalto", m)|list %}
+        {% if group %}
+        <section class="meal">
+          <header><h3>{{ m }}</h3><span class="meal-kcal">{{ "%.0f"|format(group|sum(attribute="kcal")) }} kcal</span></header>
+          <ul class="items">
+          {% for e in group %}
+            <li class="item">
+              <div class="item-main"><b>{{ e.name }}</b>
+                <small>{{ e.eaten_at[11:16] }} &middot; {{ "%g"|format(e.servings) }} &times; {{ e.serving_label }}</small></div>
+              <span class="item-kcal">{{ "%.0f"|format(e.kcal) }}</span>
+              <form method="post" action="/delete/{{ e.id }}" onsubmit="return confirm('Hapus entri ini?')">
+                <input type="hidden" name="day" value="{{ day.isoformat() }}">
+                <button class="x" type="submit" aria-label="Hapus {{ e.name }}">{{ icon("close") }}</button>
+              </form>
+            </li>
+          {% endfor %}
+          </ul>
+        </section>
+        {% endif %}
       {% endfor %}
-      </tbody>
-    </table>
+      {# entries whose meal type is not one of the four (older data) #}
+      {% set known = entries|selectattr("meal_type", "in", meal_types)|list %}
+      {% if known|length < entries|length %}
+        <section class="meal">
+          <header><h3>Lainnya</h3></header>
+          <ul class="items">
+          {% for e in entries if e.meal_type not in meal_types %}
+            <li class="item">
+              <div class="item-main"><b>{{ e.name }}</b><small>{{ e.eaten_at[11:16] }} &middot; {{ "%g"|format(e.servings) }} &times; {{ e.serving_label }}</small></div>
+              <span class="item-kcal">{{ "%.0f"|format(e.kcal) }}</span>
+              <form method="post" action="/delete/{{ e.id }}" onsubmit="return confirm('Hapus entri ini?')">
+                <input type="hidden" name="day" value="{{ day.isoformat() }}">
+                <button class="x" type="submit" aria-label="Hapus {{ e.name }}">{{ icon("close") }}</button>
+              </form>
+            </li>
+          {% endfor %}
+          </ul>
+        </section>
+      {% endif %}
     {% else %}
-    <p class="empty">Belum ada catatan untuk hari ini.</p>
-    {% endif %}
-  </section>
-
-  {% if micros %}
-  <section class="card">
-    <strong class="card-title">Mikronutrien hari ini</strong>
-    {% for m in micros %}
-    <div class="goal">
-      <div class="top"><span>{{ m.label }}</span>
-        <span><b>{{ "%.1f"|format(m.total) }}</b> / {{ m.ref }} {{ m.unit }}{% if m.limit %} (batas){% endif %}</span></div>
-      <div class="bar {% if m.limit and m.total > m.ref %}over{% endif %}"><span style="width:{{ [100, 100 * m.total / m.ref]|min|round(0) }}%"></span></div>
-      {% if m.imputed_pct >= 1 %}<div class="sub est">~ {{ "%.0f"|format(m.imputed_pct) }}% dari nilai perkiraan (imputasi)</div>{% endif %}
-    </div>
-    {% endfor %}
-    <p class="sub">Hanya bahan yang punya data mikronutrien yang dihitung, jadi angkanya batas bawah. {% if akg %}Acuan: AKG 2019 untuk {{ "laki-laki" if akg.sex == "m" else "perempuan" }} {% if akg.age_max|int >= 100 %}80+{% else %}{{ akg.age_min }}&ndash;{{ akg.age_max }}{% endif %} th (natrium: angka AKG, dipakai sebagai batas).{% else %}Acuan umum dewasa, belum ada profil. <a href="/settings">Isi profil</a> untuk angka AKG.{% endif %} Bukan saran medis.</p>
-  </section>
-  {% endif %}
-
-  <section class="card">
-    {% if dishes %}
-    <form method="post" action="/log">
-      <input type="hidden" name="day" value="{{ day.isoformat() }}">
-      <label for="dish_id">Makanan</label>
-      <select id="dish_id" name="dish_id" required>
-        {% for d in dishes %}
-        <option value="{{ d.id }}">{{ d.name }} ({{ d.serving_label }})</option>
-        {% endfor %}
-      </select>
-      <div class="row">
-        <div>
-          <label for="servings">Porsi</label>
-          <input id="servings" name="servings" type="number" step="0.25" min="0.25" max="20" value="1" required>
-        </div>
-        <div>
-          <label for="time">Jam</label>
-          <input id="time" name="time" type="time" value="{{ now_time }}" required>
-        </div>
+      <p class="empty">Belum ada catatan{% if is_today %} hari ini{% endif %}.</p>
+      <div class="actions">
+        <a class="btn primary" href="/photo">{{ icon("photo") }} Foto makanan</a>
+        <a class="btn" href="/add?day={{ day.isoformat() }}">{{ icon("add") }} Catat manual</a>
       </div>
-      <label for="meal_type">Waktu makan</label>
-      <select id="meal_type" name="meal_type">
-        {% for m in meal_types %}
-        <option {% if m == default_meal %}selected{% endif %}>{{ m }}</option>
-        {% endfor %}
-      </select>
-      <button class="primary" type="submit">Catat</button>
-    </form>
-    {% else %}
-    <p class="empty">Belum ada makanan di database. Jalankan <code>python import_data.py</code> dulu (Step 3).</p>
     {% endif %}
-  </section>
+  </div>
 
+  <aside>
+    {% if micros %}
+    <details class="fold" open>
+      <summary>Mikronutrien</summary>
+      {% for m in micros %}
+      <div class="nut">
+        <div class="top"><span>{{ m.label }}{% if m.limit %}<em class="limit">batas</em>{% endif %}</span>
+          <span><b>{{ "%.1f"|format(m.total) }}</b> / {{ "%g"|format(m.ref) }} {{ m.unit }}</span></div>
+        <div class="meter thin {% if m.limit and m.total > m.ref %}over{% endif %}"><i style="width:{{ [100, 100 * m.total / m.ref]|min|round(0) }}%"></i></div>
+        {% if m.imputed_pct >= 1 %}<div class="est">~{{ "%.0f"|format(m.imputed_pct) }}% dari nilai perkiraan</div>{% endif %}
+      </div>
+      {% endfor %}
+      <p class="sub foot">Hanya bahan yang punya data mikronutrien yang dihitung, jadi angkanya batas bawah.
+        {% if akg %}Acuan: AKG 2019 untuk {{ "laki-laki" if akg.sex == "m" else "perempuan" }} {% if akg.age_max|int >= 100 %}80+{% else %}{{ akg.age_min }}&ndash;{{ akg.age_max }}{% endif %} th (natrium dipakai sebagai batas).{% else %}Acuan umum dewasa; <a href="/settings">isi profil</a> untuk angka AKG.{% endif %} Bukan saran medis.</p>
+    </details>
+    {% endif %}
+  </aside>
+  </div>
 {% endblock %}

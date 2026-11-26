@@ -1,55 +1,57 @@
 {% extends "base.html" %}
+{% from "_icons.html" import icon %}
+{% block title %}7 hari · Food Tracker{% endblock %}
+{% block heading %}7 hari{% endblock %}
 {% block content %}
-  <div class="daynav">
-    <a href="/week?end={{ prev_end.isoformat() }}">&larr; Sebelumnya</a>
-    <strong>{{ days[0].date.strftime("%d %b") }} &ndash; {{ days[-1].date.strftime("%d %b") }}</strong>
-    <a href="/week?end={{ next_end.isoformat() }}">Berikutnya &rarr;</a>
-  </div>
+  <div class="cols">
+  <div>
+    <div class="daynav">
+      <a href="/week?end={{ prev_end.isoformat() }}" aria-label="Minggu sebelumnya">{{ icon("left") }}</a>
+      <div class="when"><b>{{ days[0].date|tgl("short") }} &ndash; {{ days[-1].date|tgl("short") }}</b><span>kalori per hari</span></div>
+      <a href="/week?end={{ next_end.isoformat() }}" aria-label="Minggu berikutnya">{{ icon("right") }}</a>
+    </div>
 
-  <section class="card">
-    <div class="sub">Kalori per hari{% if targets %} (garis putus-putus = target {{ "%.0f"|format(targets.kcal) }}){% endif %}</div>
     <div class="chart">
-      {% if targets %}<div class="line" style="bottom:{{ 100 * targets.kcal / scale }}%"></div>{% endif %}
+      {% if targets %}<div class="goal-line" style="bottom:{{ 100 * targets.kcal / scale }}%"><span>target {{ "%.0f"|format(targets.kcal) }}</span></div>{% endif %}
       {% for d in days %}
-      <div class="col {% if targets and d.kcal > targets.kcal %}over{% endif %}">
-        <span style="height:{{ 100 * d.kcal / scale }}%" title="{{ '%.0f'|format(d.kcal) }} kcal"></span>
-      </div>
+      <a class="col {% if not d.logged %}none{% elif targets and d.kcal > targets.kcal %}over{% endif %}" href="/?day={{ d.date.isoformat() }}" aria-label="{{ d.date|tgl('short') }}: {{ '%.0f'|format(d.kcal) }} kcal">
+        <em>{{ "%.0f"|format(d.kcal) if d.logged else "" }}</em>
+        <i style="height:{{ [100 * d.kcal / scale, 1.5]|max }}%"></i>
+      </a>
       {% endfor %}
     </div>
-    <div class="vals">{% for d in days %}<div>{{ "%.0f"|format(d.kcal) if d.logged else "–" }}</div>{% endfor %}</div>
-    <div class="labels">{% for d in days %}<div><a href="/?day={{ d.date.isoformat() }}" style="color:inherit">{{ d.date.strftime("%a")[:3] }}<br>{{ d.date.day }}</a></div>{% endfor %}</div>
-  </section>
+    <div class="days">{% for d in days %}<a href="/?day={{ d.date.isoformat() }}"><b>{{ d.date.day }}</b>{{ d.date|hari(true) }}</a>{% endfor %}</div>
 
-  <section class="card">
+    <h2>Rata-rata per hari</h2>
     {% if logged_days %}
-    <table>
-      <thead><tr><th>Rata-rata ({{ logged_days }} hari tercatat)</th><th class="num"></th></tr></thead>
-      <tbody>
-        <tr><td>Kalori</td><td class="num">{{ "%.0f"|format(avg.kcal) }} kcal</td></tr>
-        <tr><td>Protein</td><td class="num">{{ "%.0f"|format(avg.protein) }} g</td></tr>
-        <tr><td>Karbo</td><td class="num">{{ "%.0f"|format(avg.carbs) }} g</td></tr>
-        <tr><td>Lemak</td><td class="num">{{ "%.0f"|format(avg.fat) }} g</td></tr>
-      </tbody>
-    </table>
-    <p class="sub">Hari tanpa catatan tidak dihitung, supaya rata-rata tidak turun palsu.</p>
+    <div class="stats">
+      <div><small>Kalori</small><b>{{ "%.0f"|format(avg.kcal) }} <span>kcal</span></b></div>
+      <div><small>Protein</small><b>{{ "%.0f"|format(avg.protein) }} <span>g</span></b></div>
+      <div><small>Karbo</small><b>{{ "%.0f"|format(avg.carbs) }} <span>g</span></b></div>
+      <div><small>Lemak</small><b>{{ "%.0f"|format(avg.fat) }} <span>g</span></b></div>
+    </div>
+    <p class="hint">{{ logged_days }} hari tercatat. Hari tanpa catatan tidak dihitung, supaya rata-rata tidak turun palsu.</p>
     {% else %}
     <p class="empty">Belum ada catatan di minggu ini.</p>
     {% endif %}
-  </section>
+  </div>
 
-  {% if micros %}
-  <section class="card">
-    <strong class="card-title">Mikronutrien rata-rata per hari</strong>
-    {% for m in micros %}
-    <div class="goal">
-      <div class="top"><span>{{ m.label }}</span>
-        <span><b>{{ "%.1f"|format(m.avg) }}</b> / {{ "%g"|format(m.ref) }} {{ m.unit }}{% if m.limit %} <em class="tag">batas</em>{% endif %}</span></div>
-      <div class="bar {% if m.limit and m.avg > m.ref %}over{% endif %}"><span style="width:{{ [100, 100 * m.avg / m.ref]|min|round(0) }}%"></span></div>
-      <div class="sub est">{{ m.hit }} dari {{ m.days }} hari {% if m.limit %}di bawah batas{% else %}mencapai acuan{% endif %}</div>
-    </div>
-    {% endfor %}
-    <p class="sub foot">Hanya bahan yang punya data mikronutrien yang dihitung, jadi angkanya batas bawah.
-      {% if akg %}Acuan: AKG 2019.{% else %}Acuan umum dewasa; <a href="/settings">isi profil</a> untuk angka AKG.{% endif %} Bukan saran medis.</p>
-  </section>
-  {% endif %}
+  <aside>
+    {% if micros %}
+    <details class="fold" open>
+      <summary>Mikronutrien, rata-rata</summary>
+      {% for m in micros %}
+      <div class="nut">
+        <div class="top"><span>{{ m.label }}{% if m.limit %}<em class="limit">batas</em>{% endif %}</span>
+          <span><b>{{ "%.1f"|format(m.avg) }}</b> / {{ "%g"|format(m.ref) }} {{ m.unit }}</span></div>
+        <div class="meter thin {% if m.limit and m.avg > m.ref %}over{% endif %}"><i style="width:{{ [100, 100 * m.avg / m.ref]|min|round(0) }}%"></i></div>
+        <div class="sub" style="font-size:.76rem;margin-top:4px">{{ m.hit }} dari {{ m.days }} hari {% if m.limit %}di bawah batas{% else %}mencapai acuan{% endif %}</div>
+      </div>
+      {% endfor %}
+      <p class="sub foot">Hanya bahan yang punya data mikronutrien yang dihitung, jadi angkanya batas bawah.
+        {% if akg %}Acuan: AKG 2019.{% else %}Acuan umum dewasa; <a href="/settings">isi profil</a> untuk angka AKG.{% endif %} Bukan saran medis.</p>
+    </details>
+    {% endif %}
+  </aside>
+  </div>
 {% endblock %}

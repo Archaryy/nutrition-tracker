@@ -1,12 +1,71 @@
 {% extends "base.html" %}
+{% from "_icons.html" import icon %}
+{% block title %}Foto · Food Tracker{% endblock %}
+{% block heading %}Foto makanan{% endblock %}
 {% block content %}
-  <section class="card">
-    <strong class="card-title">Foto makanan</strong>
-    <p class="sub">Foto dianalisis di komputer ini oleh model lokal ({{ model }}). Hasilnya perkiraan; kamu akan memeriksa dan mengoreksinya sebelum disimpan.</p>
-    <form method="post" action="/photo" enctype="multipart/form-data">
-      <label for="photo">Ambil atau pilih foto</label>
-      <input id="photo" name="photo" type="file" accept="image/*" capture="environment" required>
-      <button class="primary" type="submit" onclick="this.textContent='Menganalisis... (bisa sampai beberapa menit)'">Analisis foto</button>
-    </form>
-  </section>
+<div class="form-narrow">
+  <form id="photoForm" method="post" action="/photo" enctype="multipart/form-data">
+    <div class="drop" id="drop">
+      <span id="dropIdle" style="display:contents">
+        {{ icon("photo") }}
+        <strong>Foto piringmu dari atas</strong>
+        <span>Seluruh piring terlihat, cahaya cukup. Satu foto, satu waktu makan.</span>
+      </span>
+      <img id="preview" alt="" hidden>
+    </div>
+
+    <div class="pick">
+      <label class="btn primary" for="cam" style="margin:0">{{ icon("photo") }} Kamera</label>
+      <label class="btn" for="gal" style="margin:0">{{ icon("gallery") }} Galeri</label>
+      <input id="cam" type="file" accept="image/*" capture="environment">
+      <input id="gal" type="file" accept="image/*">
+    </div>
+    <input id="photo" name="photo" type="file" accept="image/*" hidden required>
+
+    <button id="go" class="btn primary block" type="submit" disabled>Analisis foto</button>
+    <p class="hint">Dianalisis di komputer ini oleh model lokal ({{ model }}), tidak dikirim ke internet. Hasilnya perkiraan; kamu memeriksa dan mengoreksinya sebelum disimpan.</p>
+  </form>
+</div>
+
+<script>
+  // Phone photos are often 5-12 MB. Shrink big ones in the browser before uploading: faster over
+  // mobile data, under the server's size limit, and plenty for recognising food.
+  async function shrinkPhoto(file, maxSide) {
+    const bmp = await createImageBitmap(file, { imageOrientation: "from-image" });
+    const scale = Math.min(1, maxSide / Math.max(bmp.width, bmp.height));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.round(bmp.width * scale);
+    canvas.height = Math.round(bmp.height * scale);
+    canvas.getContext("2d").drawImage(bmp, 0, 0, canvas.width, canvas.height);
+    return new Promise(function (resolve, reject) {
+      canvas.toBlob(function (b) { b ? resolve(b) : reject(new Error("toBlob failed")); }, "image/jpeg", 0.85);
+    });
+  }
+  const form = document.getElementById("photoForm"), main = document.getElementById("photo"),
+        go = document.getElementById("go"), preview = document.getElementById("preview"),
+        idle = document.getElementById("dropIdle");
+  function chosen(input) {
+    const file = input.files[0];
+    if (!file) return;
+    main.files = input.files;                       // the form submits #photo
+    preview.src = URL.createObjectURL(file);
+    preview.hidden = false; idle.style.display = "none"; go.disabled = false;
+  }
+  document.getElementById("cam").addEventListener("change", function () { chosen(this); });
+  document.getElementById("gal").addEventListener("change", function () { chosen(this); });
+  form.addEventListener("submit", async function (e) {
+    go.disabled = true; go.textContent = "Menganalisis… bisa sampai beberapa menit";
+    const file = main.files[0];
+    if (!file || file.size < 1500000 || form.dataset.ready) return;
+    e.preventDefault();
+    try {
+      const blob = await shrinkPhoto(file, 1280);
+      const dt = new DataTransfer();
+      dt.items.add(new File([blob], "photo.jpg", { type: "image/jpeg" }));
+      main.files = dt.files;
+    } catch (err) { /* if shrinking fails, send the original */ }
+    form.dataset.ready = "1";
+    form.submit();
+  });
+</script>
 {% endblock %}
